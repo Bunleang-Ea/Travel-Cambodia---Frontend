@@ -1,28 +1,108 @@
 import React, { useState } from "react";
 
+const MAX_PHOTO_COUNT = 5;
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+];
+
 const ReviewModal = ({
   isOpen = true,
   onClose,
   onSubmit,
   isSubmitting = false,
+  title = "Share your experiences",
+  submitLabel = "Submit Review",
+  initialRating = 0,
+  initialReviewText = "",
 }) => {
   // State for interactive star rating
-  const [rating, setRating] = useState(0);
+  const [rating, setRating] = useState(() => Number(initialRating) || 0);
   const [hoverRating, setHoverRating] = useState(0);
-  const [reviewText, setReviewText] = useState("");
+  const [reviewText, setReviewText] = useState(() =>
+    String(initialReviewText || ""),
+  );
+  const [photoFiles, setPhotoFiles] = useState([]);
+  const [photoError, setPhotoError] = useState("");
   const ratingLabels = ["Poor", "Fair", "Good", "Very Good", "Excellent"];
   const activeRating = hoverRating || rating;
+
+  const resetForm = () => {
+    setRating(0);
+    setHoverRating(0);
+    setReviewText("");
+    setPhotoFiles([]);
+    setPhotoError("");
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose?.();
+  };
+
+  const handlePhotoChange = (event) => {
+    const incomingFiles = Array.from(event.target.files || []);
+    if (incomingFiles.length === 0) return;
+
+    const acceptedFiles = [];
+    for (const file of incomingFiles) {
+      if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+        setPhotoError("Only JPG, JPEG, PNG, or WEBP files are allowed.");
+        continue;
+      }
+      if (file.size > MAX_PHOTO_SIZE) {
+        setPhotoError("Each image must be 5MB or smaller.");
+        continue;
+      }
+      acceptedFiles.push(file);
+    }
+
+    if (acceptedFiles.length > 0) {
+      setPhotoError("");
+    }
+
+    setPhotoFiles((prev) => {
+      const merged = [...prev];
+      for (const file of acceptedFiles) {
+        if (merged.length >= MAX_PHOTO_COUNT) break;
+        const duplicate = merged.some(
+          (existing) =>
+            existing.name === file.name &&
+            existing.size === file.size &&
+            existing.lastModified === file.lastModified,
+        );
+        if (!duplicate) {
+          merged.push(file);
+        }
+      }
+      return merged.slice(0, MAX_PHOTO_COUNT);
+    });
+
+    event.target.value = "";
+  };
+
+  const removePhoto = (indexToRemove) => {
+    setPhotoFiles((prev) => prev.filter((_, index) => index !== indexToRemove));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!rating || !reviewText.trim()) return;
 
     if (onSubmit) {
-      await onSubmit({ rating, reviewText: reviewText.trim() });
+      await onSubmit({
+        rating,
+        reviewText: reviewText.trim(),
+        photoFiles,
+      });
+      resetForm();
       return;
     }
 
-    onClose?.();
+    handleClose();
   };
 
   // If modal is not open, don't render anything
@@ -35,7 +115,7 @@ const ReviewModal = ({
       <div className="relative w-full max-w-md bg-white/95 rounded-[1.5rem] shadow-[0_18px_50px_rgba(15,23,42,0.08)] border border-gray-200 overflow-hidden flex flex-col backdrop-blur-sm">
         {/* Close Button */}
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 transition-colors z-10"
           aria-label="Close modal"
         >
@@ -56,9 +136,7 @@ const ReviewModal = ({
 
         <div className="p-5 sm:p-6">
           {/* Header */}
-          <h2 className="text-2xl font-bold text-gray-900 mb-5">
-            Share your experiences
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-5">{title}</h2>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* 1. Star Rating Section */}
@@ -122,7 +200,18 @@ const ReviewModal = ({
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Add Photos
               </label>
-              <div className="w-full border-2 border-dashed border-gray-300 bg-white rounded-xl p-5 sm:p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-50 hover:border-green-500 transition-all group">
+              <label
+                htmlFor="review-photo-files"
+                className="w-full border-2 border-dashed border-gray-300 bg-white rounded-xl p-5 sm:p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-50 hover:border-green-500 transition-all group"
+              >
+                <input
+                  id="review-photo-files"
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                />
                 <svg
                   className="w-8 h-8 text-black mb-2 group-hover:scale-110 transition-transform"
                   fill="currentColor"
@@ -134,16 +223,45 @@ const ReviewModal = ({
                   Click to upload or drag and drop
                 </p>
                 <p className="text-xs text-gray-500 font-medium">
-                  PNG, JPG, JPEG (MAX 10MB)
+                  PNG, JPG, JPEG, WEBP (max 5MB each)
                 </p>
-              </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Up to {MAX_PHOTO_COUNT} photos
+                </p>
+              </label>
+              {photoError ? (
+                <p className="mt-2 text-xs font-medium text-red-600">
+                  {photoError}
+                </p>
+              ) : null}
+              {photoFiles.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {photoFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 bg-gray-50"
+                    >
+                      <p className="text-xs text-gray-700 truncate pr-3">
+                        {file.name}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(index)}
+                        className="text-xs font-semibold text-red-600 hover:text-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             {/* 4. Action Buttons */}
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="text-gray-600 hover:text-gray-800 text-sm font-semibold px-3 py-2 transition-colors"
               >
                 Cancel
@@ -153,7 +271,7 @@ const ReviewModal = ({
                 disabled={isSubmitting || !rating || !reviewText.trim()}
                 className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white text-sm font-semibold py-2.5 px-5 rounded-xl shadow-md hover:shadow-lg transition duration-300"
               >
-                {isSubmitting ? "Submitting..." : "Submit Review"}
+                {isSubmitting ? "Submitting..." : submitLabel}
               </button>
             </div>
           </form>

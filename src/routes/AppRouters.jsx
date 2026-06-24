@@ -14,6 +14,7 @@ import DetailsPage from "../pages/main/DetailsPage";
 import BrowseCategories from "../pages/main/BrowseCategories";
 import CategoryDetailsPage from "../pages/main/CategoryDetailsPage";
 import ContactUsPage from "../pages/main/ContactUsPage";
+import AboutPage from "../pages/main/AboutPage";
 import UserProfilePage from "../pages/Users/UserProfilePage";
 import ProfileSettingsPage from "../pages/Users/ProfileSettingsPage";
 import GuestItineraryPage from "../pages/Itinerary/GuestItineraryPage";
@@ -24,14 +25,15 @@ import AdminLayout from "../pages/admin/AdminLayout";
 import ManagePlaces from "../pages/admin/ManagePlaces";
 import ManageReview from "../pages/admin/ManageReview";
 import ManageCategory from "../pages/admin/ManageCategory";
+import ManageContacts from "../pages/admin/ManageContacts";
 import AddDestinationPage from "../pages/admin/AddDestinationPage";
 import AddCategoryPage from "../pages/admin/AddCategoryPage";
+import ManageLocations from "../pages/admin/ManageLocations";
+import AddLocationPage from "../pages/admin/AddLocationPage";
+import DashboardPage from "../pages/admin/DashboardPage";
 import SuperAdminLayout from "../pages/super-admin/SuperAdminLayout";
 import ManageUsersPage from "../pages/super-admin/ManageUsersPage";
-import RoleManagementPage from "../pages/super-admin/RoleManagementPage";
-import SystemPermissionsPage from "../pages/super-admin/SystemPermissionsPage";
-import AdminSettingsPage from "../pages/super-admin/AdminSettingsPage";
-import AddNewRolePage from "../pages/super-admin/AddNewRolePage";
+import CreateUserPage from "../pages/super-admin/CreateUserPage";
 import NotFound from "../pages/NotFound";
 import { getAuthUser, getRoleDestination } from "../utils/authRole";
 
@@ -71,8 +73,8 @@ const AdminEntryRoute = () => {
 
   if (!email) return <Navigate to="/login" replace />;
   if (role === "superadmin")
-    return <Navigate to="/super-admin/users" replace />;
-  if (role === "admin") return <Navigate to="/admin/places" replace />;
+    return <Navigate to="/super-admin/dashboard" replace />;
+  if (role === "admin") return <Navigate to="/admin/dashboard" replace />;
 
   return <Navigate to="/" replace />;
 };
@@ -82,7 +84,7 @@ const SuperAdminEntryRoute = () => {
 
   if (!email) return <Navigate to="/login" replace />;
   if (role === "superadmin")
-    return <Navigate to="/super-admin/users" replace />;
+    return <Navigate to="/super-admin/dashboard" replace />;
 
   return <Navigate to={getRoleDestination(role) || "/"} replace />;
 };
@@ -108,9 +110,13 @@ export default function AppRouters() {
           <Route path="/categories" element={<BrowseCategories />} />
           <Route path="/categories/:slug" element={<CategoryDetailsPage />} />
           <Route path="/contact" element={<ContactUsPage />} />
+          <Route path="/about" element={<AboutPage />} />
           <Route path="/itinerary" element={<ItineraryRoutesShell />} />
           <Route path="/itinerary/create" element={<CreateTripRoutesShell />} />
-          <Route path="/itinerary/:journeyId" element={<JourneyDetailRoutesShell />} />
+          <Route
+            path="/itinerary/:journeyId"
+            element={<JourneyDetailRoutesShell />}
+          />
           <Route path="/user/profile" element={<UserProfilePage />} />
           <Route path="/user/settings" element={<ProfileSettingsPage />} />
         </Route>
@@ -127,10 +133,19 @@ export default function AppRouters() {
         {/* Admin routes */}
         <Route path="/admin" element={<AdminEntryRoute />} />
         <Route
+          path="/admin/dashboard"
+          element={
+            <RoleGuard
+              allowedRoles={["admin"]}
+              element={<AdminRoutesShell element={<DashboardPage />} />}
+            />
+          }
+        />
+        <Route
           path="/admin/places"
           element={
             <RoleGuard
-              allowedRoles={["admin", "superadmin"]}
+              allowedRoles={["admin"]}
               element={<AdminRoutesShell element={<ManagePlaces />} />}
             />
           }
@@ -139,8 +154,26 @@ export default function AppRouters() {
           path="/admin/categories"
           element={
             <RoleGuard
-              allowedRoles={["admin", "superadmin"]}
+              allowedRoles={["admin"]}
               element={<AdminRoutesShell element={<ManageCategory />} />}
+            />
+          }
+        />
+        <Route
+          path="/admin/locations"
+          element={
+            <RoleGuard
+              allowedRoles={["admin"]}
+              element={<AdminRoutesShell element={<ManageLocations />} />}
+            />
+          }
+        />
+        <Route
+          path="/admin/add-location"
+          element={
+            <RoleGuard
+              allowedRoles={["admin"]}
+              element={<AdminRoutesShell element={<AddLocationPage />} />}
             />
           }
         />
@@ -148,7 +181,7 @@ export default function AppRouters() {
           path="/admin/reviews"
           element={
             <RoleGuard
-              allowedRoles={["admin", "superadmin"]}
+              allowedRoles={["admin"]}
               element={<AdminRoutesShell element={<ManageReview />} />}
             />
           }
@@ -157,7 +190,7 @@ export default function AppRouters() {
           path="/admin/add-destination"
           element={
             <RoleGuard
-              allowedRoles={["admin", "superadmin"]}
+              allowedRoles={["admin"]}
               element={<AdminRoutesShell element={<AddDestinationPage />} />}
             />
           }
@@ -166,23 +199,32 @@ export default function AppRouters() {
           path="/admin/add-category"
           element={
             <RoleGuard
-              allowedRoles={["admin", "superadmin"]}
+              allowedRoles={["admin"]}
               element={<AdminRoutesShell element={<AddCategoryPage />} />}
             />
           }
         />
         <Route
-          path="/admin/settings"
+          path="/admin/contacts"
           element={
             <RoleGuard
-              allowedRoles={["admin", "superadmin"]}
-              element={<AdminRoutesShell element={<ProfileSettingsPage />} />}
+              allowedRoles={["admin"]}
+              element={<AdminRoutesShell element={<ManageContacts />} />}
             />
           }
         />
 
         {/* Super Admin routes */}
         <Route path="/super-admin" element={<SuperAdminEntryRoute />} />
+        <Route
+          path="/super-admin/dashboard"
+          element={
+            <RoleGuard
+              allowedRoles={["superadmin"]}
+              element={<SuperAdminRoutesShell element={<DashboardPage />} />}
+            />
+          }
+        />
         <Route
           path="/super-admin/users"
           element={
@@ -193,22 +235,11 @@ export default function AppRouters() {
           }
         />
         <Route
-          path="/super-admin/roles"
+          path="/super-admin/create-user"
           element={
             <RoleGuard
               allowedRoles={["superadmin"]}
-              element={
-                <SuperAdminRoutesShell element={<RoleManagementPage />} />
-              }
-            />
-          }
-        />
-        <Route
-          path="/super-admin/roles/new"
-          element={
-            <RoleGuard
-              allowedRoles={["superadmin"]}
-              element={<SuperAdminRoutesShell element={<AddNewRolePage />} />}
+              element={<SuperAdminRoutesShell element={<CreateUserPage />} />}
             />
           }
         />
@@ -231,6 +262,24 @@ export default function AppRouters() {
           }
         />
         <Route
+          path="/super-admin/locations"
+          element={
+            <RoleGuard
+              allowedRoles={["superadmin"]}
+              element={<SuperAdminRoutesShell element={<ManageLocations />} />}
+            />
+          }
+        />
+        <Route
+          path="/super-admin/add-location"
+          element={
+            <RoleGuard
+              allowedRoles={["superadmin"]}
+              element={<SuperAdminRoutesShell element={<AddLocationPage />} />}
+            />
+          }
+        />
+        <Route
           path="/super-admin/reviews"
           element={
             <RoleGuard
@@ -240,24 +289,31 @@ export default function AppRouters() {
           }
         />
         <Route
-          path="/super-admin/permissions"
+          path="/super-admin/add-destination"
           element={
             <RoleGuard
               allowedRoles={["superadmin"]}
               element={
-                <SuperAdminRoutesShell element={<SystemPermissionsPage />} />
+                <SuperAdminRoutesShell element={<AddDestinationPage />} />
               }
             />
           }
         />
         <Route
-          path="/super-admin/settings"
+          path="/super-admin/add-category"
           element={
             <RoleGuard
               allowedRoles={["superadmin"]}
-              element={
-                <SuperAdminRoutesShell element={<AdminSettingsPage />} />
-              }
+              element={<SuperAdminRoutesShell element={<AddCategoryPage />} />}
+            />
+          }
+        />
+        <Route
+          path="/super-admin/contacts"
+          element={
+            <RoleGuard
+              allowedRoles={["superadmin"]}
+              element={<SuperAdminRoutesShell element={<ManageContacts />} />}
             />
           }
         />

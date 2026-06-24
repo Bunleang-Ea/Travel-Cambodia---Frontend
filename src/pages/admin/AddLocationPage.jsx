@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  createAdminCategory,
-  updateAdminCategory,
+  createAdminLocation,
+  updateAdminLocation,
 } from "../../services/modules/adminApi";
 
 import { toAbsoluteMediaUrl } from "../../services/modules/travelApi";
 
-const AddCategoryPage = () => {
+const AddLocationPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef(null);
@@ -19,24 +19,22 @@ const AddCategoryPage = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [formData, setFormData] = useState({
     name: "",
-    description: "",
     imageFile: null,
     imagePreview: "",
   });
 
   const locationState = location.state || {};
-  const editingCategory = locationState.category || null;
+  const editingLocation = locationState.location || null;
 
   useEffect(() => {
-    if (!editingCategory) return;
+    if (!editingLocation) return;
     setFormData((prev) => ({
       ...prev,
-      name: String(editingCategory.name || "").trim(),
-      description: String(editingCategory.description || "").trim(),
-      imagePreview: toAbsoluteMediaUrl(editingCategory.image_url || editingCategory.image || ""),
+      name: String(editingLocation.name || "").trim(),
+      imagePreview: toAbsoluteMediaUrl(editingLocation.image_url || editingLocation.image || ""),
       imageFile: null,
     }));
-  }, [editingCategory]);
+  }, [editingLocation]);
 
   // Support pasting image from clipboard
   useEffect(() => {
@@ -93,7 +91,7 @@ const AddCategoryPage = () => {
     setSuccessMessage("");
 
     if (!formData.name.trim()) {
-      setErrorMessage("Category name is required.");
+      setErrorMessage("Location name is required.");
       return;
     }
 
@@ -101,28 +99,26 @@ const AddCategoryPage = () => {
     try {
       const payload = new FormData();
       payload.append("name", formData.name.trim());
-      payload.append("description", formData.description.trim());
       if (formData.imageFile) {
         payload.append("image", formData.imageFile);
       }
 
-      if (editingCategory) {
-        await updateAdminCategory(editingCategory.id, payload);
-        setSuccessMessage("Category updated successfully.");
-        navigate(`${portalBasePath}/categories`);
+      if (editingLocation) {
+        await updateAdminLocation(editingLocation.id, payload);
+        setSuccessMessage("Location updated successfully.");
+        navigate(`${portalBasePath}/locations`);
         return;
       }
 
-      await createAdminCategory(payload);
-      setSuccessMessage("Category created successfully.");
+      await createAdminLocation(payload);
+      setSuccessMessage("Location created successfully.");
       setFormData({
         name: "",
-        description: "",
         imageFile: null,
         imagePreview: "",
       });
     } catch (error) {
-      setErrorMessage(error?.message || "Failed to save category.");
+      setErrorMessage(error?.message || "Failed to save location.");
     } finally {
       setIsSaving(false);
     }
@@ -132,10 +128,10 @@ const AddCategoryPage = () => {
     <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 py-6">
       <div className="mb-8">
         <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-2">
-          {editingCategory ? "Edit Category" : "Add New Category"}
+          {editingLocation ? "Edit Location" : "Add New Location"}
         </h2>
         <p className="text-sm text-gray-500">
-          Create a new category to organize destinations in the portal.
+          Create a new city or province to group travel destinations.
         </p>
       </div>
 
@@ -156,21 +152,21 @@ const AddCategoryPage = () => {
       >
         <div>
           <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">
-            Category Name
+            Location Name
           </label>
           <input
             type="text"
             name="name"
             value={formData.name}
             onChange={handleChange}
-            placeholder="e.g., Cultural Heritage"
+            placeholder="e.g., Siem Reap"
             className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:bg-white transition-all text-sm font-medium text-gray-800"
           />
         </div>
 
         <div>
           <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">
-            Category Image
+            Location Cover Image
           </label>
 
           <div className="flex flex-col sm:flex-row gap-6 items-center">
@@ -182,7 +178,7 @@ const AddCategoryPage = () => {
                 <>
                   <img
                     src={formData.imagePreview}
-                    alt="Category preview"
+                    alt="Location preview"
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-2">
@@ -251,24 +247,10 @@ const AddCategoryPage = () => {
           </div>
         </div>
 
-        <div>
-          <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">
-            Description
-          </label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            rows={6}
-            placeholder="Briefly describe what this category represents for travelers..."
-            className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:bg-white transition-all text-sm font-medium resize-none text-gray-800"
-          />
-        </div>
-
         <div className="pt-6 flex items-center justify-end gap-4 border-t border-gray-100">
           <button
             type="button"
-            onClick={() => navigate(`${portalBasePath}/categories`)}
+            onClick={() => navigate(`${portalBasePath}/locations`)}
             className="text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors px-4 py-2.5"
           >
             Back to List
@@ -278,7 +260,7 @@ const AddCategoryPage = () => {
             disabled={isSaving}
             className="bg-[#009B3E] hover:bg-green-700 text-white text-sm font-bold py-2.5 px-8 rounded-lg shadow-sm transition duration-200 disabled:opacity-60"
           >
-            {isSaving ? "Saving..." : "Save Category"}
+            {isSaving ? "Saving..." : "Save Location"}
           </button>
         </div>
       </form>
@@ -286,4 +268,4 @@ const AddCategoryPage = () => {
   );
 };
 
-export default AddCategoryPage;
+export default AddLocationPage;

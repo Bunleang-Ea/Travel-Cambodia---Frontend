@@ -46,25 +46,34 @@ const parseResponse = async (response) => {
 };
 
 const pickValidationMessage = (data) => {
-  if (!data) return null;
-  if (typeof data === "string") return data;
-  if (typeof data.message === "string") return data.message;
-  if (typeof data.error === "string") return data.error;
-  if (typeof data.detail === "string") return data.detail;
+  const extractMessage = (value) => {
+    if (!value) return null;
+    if (typeof value === "string") return value;
 
-  if (Array.isArray(data)) {
-    const first = data[0];
-    return typeof first === "string" ? first : null;
-  }
-
-  if (typeof data === "object") {
-    for (const value of Object.values(data)) {
-      if (typeof value === "string") return value;
-      if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const message = extractMessage(item);
+        if (message) return message;
+      }
+      return null;
     }
-  }
 
-  return null;
+    if (typeof value === "object") {
+      if (typeof value.message === "string") return value.message;
+      if (typeof value.error === "string") return value.error;
+      if (typeof value.detail === "string") return value.detail;
+
+      for (const nested of Object.values(value)) {
+        const message = extractMessage(nested);
+        if (message) return message;
+      }
+    }
+
+    return null;
+  };
+
+  if (!data) return null;
+  return extractMessage(data);
 };
 
 export const httpRequest = async (
@@ -82,15 +91,30 @@ export const httpRequest = async (
         ? window.localStorage.getItem("travelCambodiaToken")
         : null;
 
+    const isFormData =
+      typeof FormData !== "undefined" && body instanceof FormData;
+    const hasContentTypeHeader = Object.keys(headers).some(
+      (headerName) => headerName.toLowerCase() === "content-type",
+    );
+    const resolvedHeaders = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
+    };
+
+    if (body !== undefined && !isFormData && !hasContentTypeHeader) {
+      resolvedHeaders["Content-Type"] = "application/json";
+    }
+
     const response = await fetch(buildUrl(path, query), {
       method,
       signal: timeoutSignal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...headers,
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: resolvedHeaders,
+      body:
+        body === undefined
+          ? undefined
+          : isFormData
+            ? body
+            : JSON.stringify(body),
     });
 
     const data = await parseResponse(response);

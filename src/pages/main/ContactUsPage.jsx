@@ -1,9 +1,21 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createContact } from "../../services/modules/contactApi";
+import { getAuthUser } from "../../utils/authRole";
+import { getMyProfile } from "../../services/modules/authApi";
+
 const GOOGLE_MAPS_EMBED_URL =
   "https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d7817.525286118235!2d104.8888541!3d11.568866!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3109519fe4077d69%3A0x20138e822e434660!2sRoyal%20University%20of%20Phnom%20Penh!5e0!3m2!1sen!2skh!4v1777275320363!5m2!1sen!2skh";
 
 const GOOGLE_MAPS_DIRECTIONS_URL =
   "https://www.google.com/maps/dir/?api=1&destination=Royal+University+of+Phnom+Penh,+Cambodia";
+
+const SUBJECT_SUGGESTIONS = [
+  "General Inquiry",
+  "Trip Planning",
+  "Booking Assistance",
+  "Feedback & Suggestions",
+  "Partnership Opportunity",
+];
 
 const ContactUsPage = () => {
   const [formData, setFormData] = useState({
@@ -11,12 +23,65 @@ const ContactUsPage = () => {
     email: "",
     subject: "",
     message: "",
+    phone: "",
   });
+  const [userProfile, setUserProfile] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    const auth = getAuthUser();
+    if (auth && auth.email) {
+      setIsLoggedIn(true);
+
+      getMyProfile()
+        .then((profileData) => {
+          const name = profileData?.full_name || auth.email.split("@")[0];
+          const email = profileData?.email || auth.email;
+          setUserProfile({ name, email });
+          setFormData((prev) => ({
+            ...prev,
+            name: name,
+            email: email,
+          }));
+        })
+        .catch(() => {
+          const name = auth.email.split("@")[0];
+          const email = auth.email;
+          setUserProfile({ name, email });
+          setFormData((prev) => ({
+            ...prev,
+            name: name,
+            email: email,
+          }));
+        });
+    }
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log("Form submitted:", formData);
-    // Add API logic here
+    (async () => {
+      try {
+        await createContact({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          subject: formData.subject.trim(),
+          message: formData.message.trim(),
+          phone: formData.phone || "",
+        });
+        setShowSuccessModal(true);
+        setFormData({
+          name: isLoggedIn && userProfile ? userProfile.name : "",
+          email: isLoggedIn && userProfile ? userProfile.email : "",
+          subject: "",
+          message: "",
+          phone: "",
+        });
+      } catch (err) {
+        setErrorMessage(err?.message || "Failed to send message.");
+      }
+    })();
   };
 
   const handleChange = (e) => {
@@ -148,34 +213,67 @@ const ContactUsPage = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Name Row */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all text-sm"
-                  placeholder="Your name"
-                  required
-                />
-              </div>
+              {/* If logged in, show info card; otherwise show Name/Email fields */}
+              {isLoggedIn && userProfile ? (
+                <div className="bg-green-50/50 border border-green-200 rounded-xl p-4 flex items-center gap-3 mb-6 shadow-sm">
+                  <div className="w-10 h-10 bg-[#e6f7ec] text-[#009B3E] rounded-full flex items-center justify-center font-bold text-sm shrink-0 shadow-sm border border-green-100">
+                    {userProfile.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest">Logged In Account</p>
+                    <p className="text-sm font-bold text-gray-800">
+                      {userProfile.name} <span className="font-normal text-gray-500">({userProfile.email})</span>
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Name Row */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all text-sm"
+                      placeholder="Your name"
+                      required
+                    />
+                  </div>
 
-              {/* Email */}
+                  {/* Email */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all text-sm"
+                      placeholder="Your email address"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Phone (optional) */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Email Address
+                  Phone (optional)
                 </label>
                 <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all text-sm"
-                  required
+                  placeholder="Phone number"
                 />
               </div>
 
@@ -190,8 +288,30 @@ const ContactUsPage = () => {
                   value={formData.subject}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition-all text-sm"
+                  placeholder="What is this regarding?"
                   required
                 />
+
+                {/* Suggestions Pills */}
+                <div className="mt-2.5 flex flex-wrap gap-2 items-center">
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider mr-1 select-none">
+                    Suggestions:
+                  </span>
+                  {SUBJECT_SUGGESTIONS.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, subject: suggestion }))}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-250 cursor-pointer ${
+                        formData.subject === suggestion
+                          ? "bg-[#e6f7ec] text-[#009B3E] border-[#009B3E] shadow-sm scale-[1.03]"
+                          : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                      }`}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Message */}
@@ -309,14 +429,23 @@ const ContactUsPage = () => {
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#009B3E] hover:underline"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 9m0 8V9m0 0L9 7" />
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 9m0 8V9m0 0L9 7"
+                    />
                   </svg>
                   Get Directions
                 </a>
               </div>
             </div>
-
 
             {/* Social Links */}
             <div className="bg-white rounded-[1.5rem] shadow-[0_12px_30px_rgba(15,23,42,0.07)] border border-gray-200 p-6 flex flex-col items-center">
@@ -374,6 +503,61 @@ const ContactUsPage = () => {
           </div>
         </div>
       </main>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-40 backdrop-blur-sm">
+          <div className="bg-white rounded-[2rem] max-w-md w-full p-8 shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-200 text-center relative overflow-hidden">
+            {/* Soft decorative background circles */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-50 rounded-full blur-2xl pointer-events-none"></div>
+            
+            <div className="w-16 h-16 bg-[#e6f7ec] text-[#009B3E] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-green-100 animate-bounce">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Message Sent!</h3>
+            <p className="text-sm text-gray-500 leading-relaxed mb-6 font-medium">
+              Thank you for reaching out to Travel Cambodia. Our local experts have received your message and will get back to you shortly.
+            </p>
+            
+            <button
+              type="button"
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-300 text-sm"
+            >
+              Continue Exploration
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error Modal */}
+      {errorMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-40 backdrop-blur-sm">
+          <div className="bg-white rounded-[2rem] max-w-md w-full p-8 shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-200 text-center relative overflow-hidden">
+            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-red-100">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Failed to Send</h3>
+            <p className="text-sm text-gray-500 leading-relaxed mb-6 font-medium">
+              {errorMessage}
+            </p>
+            
+            <button
+              type="button"
+              onClick={() => setErrorMessage("")}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-300 text-sm"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

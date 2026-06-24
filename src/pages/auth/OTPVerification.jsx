@@ -2,10 +2,13 @@ import React, { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   verifyOtp,
+  verifyResetOtp,
   requestResetPassword,
   register,
 } from "../../services/modules/authApi";
 import { saveAuthUser } from "../../utils/authRole";
+
+const OTP_TIMEOUT_SECONDS = 180;
 
 const OTPVerification = () => {
   const location = useLocation();
@@ -15,7 +18,7 @@ const OTPVerification = () => {
   const registerPayload = location.state?.registerPayload;
 
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(OTP_TIMEOUT_SECONDS);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRefs = useRef([]);
@@ -54,6 +57,29 @@ const OTPVerification = () => {
     }
   };
 
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData("text");
+    if (!pasteData) return;
+
+    // Filter only digits from the pasted text and take up to 6 characters
+    const cleanDigits = pasteData.replace(/\D/g, "").slice(0, 6);
+    if (cleanDigits.length === 0) return;
+
+    const newOtp = [...otp];
+    for (let i = 0; i < 6; i++) {
+      newOtp[i] = i < cleanDigits.length ? cleanDigits[i] : "";
+    }
+    setOtp(newOtp);
+
+    // Focus the next empty slot or the last filled slot
+    const targetFocusIndex = Math.min(cleanDigits.length, 5);
+    if (inputRefs.current[targetFocusIndex]) {
+      inputRefs.current[targetFocusIndex].focus();
+    }
+  };
+
+
   const handleVerify = async (e) => {
     e.preventDefault();
     const otpCode = otp.join("");
@@ -61,15 +87,28 @@ const OTPVerification = () => {
       setErrorMessage("Please enter all 6 digits.");
       return;
     }
+    if (!email) {
+      setErrorMessage("OTP session expired. Please request a new OTP.");
+      return;
+    }
     setErrorMessage("");
     setIsSubmitting(true);
     try {
-      await verifyOtp({ email, otp_code: otpCode });
       if (context === "register") {
-        saveAuthUser({ email });
+        const data = await verifyOtp({ email, otp: otpCode });
+        const accessToken = data?.tokens?.access || data?.token || data?.access;
+        saveAuthUser({
+          email: data?.email || email,
+          role: data?.user?.role,
+          roles: data?.roles,
+          isStaff: data?.is_staff ?? data?.user?.is_staff,
+          isSuperuser: data?.is_superuser ?? data?.user?.is_superuser,
+          token: accessToken,
+        });
         navigate("/");
       } else {
-        navigate("/reset-password", { state: { email } });
+        await verifyResetOtp({ email, otp: otpCode });
+        navigate("/reset-password", { state: { email, otp: otpCode } });
       }
     } catch (err) {
       setErrorMessage(err?.message || "Invalid OTP. Please try again.");
@@ -80,7 +119,7 @@ const OTPVerification = () => {
 
   const handleResend = async () => {
     setErrorMessage("");
-    setTimeLeft(60);
+    setTimeLeft(OTP_TIMEOUT_SECONDS);
     try {
       if (context === "register") {
         if (!registerPayload) {
@@ -134,6 +173,7 @@ const OTPVerification = () => {
                   ref={(el) => (inputRefs.current[index] = el)}
                   onChange={(e) => handleChange(e, index)}
                   onKeyDown={(e) => handleKeyDown(e, index)}
+                  onPaste={handlePaste}
                   className="w-8 h-10 sm:w-10 sm:h-11 text-center text-base font-semibold border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 bg-white transition-all"
                 />
               ))}

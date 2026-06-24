@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import {
   getProvinceDetails,
   getProvinces,
+  getCategories,
 } from "../../services/modules/travelApi";
 
 const DestinationsPage = () => {
@@ -10,28 +11,37 @@ const DestinationsPage = () => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [province, setProvince] = useState(null);
+  const [filters, setFilters] = useState(["All"]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let isMounted = true;
 
-    const loadProvince = async () => {
+    const loadProvinceAndCategories = async () => {
       setIsLoading(true);
       setErrorMessage("");
 
       try {
         let resolvedProvince = null;
+        let categoriesData = [];
 
         if (provinceSlug) {
-          resolvedProvince = await getProvinceDetails(provinceSlug);
-        }
-
-        if (!resolvedProvince) {
-          const provinces = await getProvinces();
+          const [provData, catsData] = await Promise.all([
+            getProvinceDetails(provinceSlug),
+            getCategories(),
+          ]);
+          resolvedProvince = provData;
+          categoriesData = catsData;
+        } else {
+          const [provinces, catsData] = await Promise.all([
+            getProvinces(),
+            getCategories(),
+          ]);
           resolvedProvince = Array.isArray(provinces)
             ? provinces[0] || null
             : null;
+          categoriesData = catsData;
         }
 
         if (!isMounted) return;
@@ -41,6 +51,13 @@ const DestinationsPage = () => {
         }
 
         setProvince(resolvedProvince);
+
+        // Extract unique category names dynamically from the API
+        const categoryTitles = Array.isArray(categoriesData)
+          ? categoriesData.map((cat) => cat.title).filter(Boolean)
+          : [];
+        const uniqueTitles = Array.from(new Set(categoryTitles));
+        setFilters(["All", ...uniqueTitles]);
       } catch (error) {
         if (!isMounted) return;
         setErrorMessage(error?.message || "Failed to load destinations.");
@@ -49,24 +66,12 @@ const DestinationsPage = () => {
       }
     };
 
-    loadProvince();
+    loadProvinceAndCategories();
 
     return () => {
       isMounted = false;
     };
   }, [provinceSlug]);
-
-  const filters = [
-    "All",
-    "Temple",
-    "Nature",
-    "Beach",
-    "Island",
-    "Urban",
-    "Nightlife",
-    "Market",
-    "Wildlife",
-  ];
 
   const safeProvince = province || {
     slug: "siem-reap",
@@ -163,12 +168,13 @@ const DestinationsPage = () => {
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-3 mt-10 mb-8">
+        {/* Scrollable Filter Pills */}
+        <div className="flex items-center gap-3 mt-10 mb-8 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth flex-nowrap no-scrollbar" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
           {filters.map((filter) => (
             <button
               key={filter}
               onClick={() => setActiveFilter(filter)}
-              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors border-2 ${
+              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors border-2 shrink-0 ${
                 activeFilter === filter
                   ? "bg-gradient-to-r from-green-600 to-green-700 border-green-600 text-white shadow-sm"
                   : "bg-white border-gray-300 text-gray-600 hover:border-green-500 hover:text-green-700"
@@ -178,6 +184,13 @@ const DestinationsPage = () => {
             </button>
           ))}
         </div>
+
+        {/* CSS to hide Webkit scrollbars */}
+        <style>{`
+          .no-scrollbar::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
 
         {errorMessage ? (
           <div className="mb-8 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 font-medium">

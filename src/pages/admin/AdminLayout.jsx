@@ -1,13 +1,92 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
+import { getMyProfile } from "../../services/modules/authApi";
+import { API_BASE_URL } from "../../services/core/apiConfig";
+import { getAuthUser } from "../../utils/authRole";
+
+const toAbsoluteMediaUrl = (value) => {
+  const source = String(value || "").trim();
+  if (!source) return "";
+  if (/^https?:\/\//i.test(source)) return source;
+  if (source.startsWith("data:")) return source;
+
+  // Resolve relative paths (e.g. "profile_pictures/file.jpg") against the
+  // Django backend origin, not the React dev-server origin.
+  try {
+    const backendOrigin = new URL(API_BASE_URL).origin;
+    return new URL(source, backendOrigin).toString();
+  } catch {
+    return source;
+  }
+};
 
 const AdminLayout = ({ children }) => {
+  const { email } = getAuthUser();
   const navClass = ({ isActive }) =>
     `flex items-center px-4 py-2.5 rounded-lg text-sm transition-colors ${
       isActive
         ? "bg-[#e6f7ec] text-[#009B3E] font-bold"
         : "text-gray-600 hover:bg-gray-50 font-medium"
     }`;
+
+  const [profile, setProfile] = useState({
+    full_name: "",
+    profile_picture: "",
+    profile_picture_url: "",
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfile = async () => {
+      try {
+        const data = await getMyProfile();
+        if (isMounted) {
+          setProfile({
+            full_name: String(data?.full_name || "").trim(),
+            profile_picture: toAbsoluteMediaUrl(data?.profile_picture || ""),
+            profile_picture_url: toAbsoluteMediaUrl(
+              data?.profile_picture_url || "",
+            ),
+          });
+        }
+      } catch {
+        if (isMounted) {
+          setProfile({
+            full_name: "",
+            profile_picture: "",
+            profile_picture_url: "",
+          });
+        }
+      }
+    };
+
+    loadProfile();
+    window.addEventListener("auth-changed", loadProfile);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("auth-changed", loadProfile);
+    };
+  }, []);
+
+  const sidebarUser = useMemo(() => {
+    const name = profile.full_name || (email ? email.split("@")[0] : "Admin");
+    const avatar =
+      profile.profile_picture || profile.profile_picture_url || "";
+
+    return {
+      name,
+      avatar,
+      initials: name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase() || "A",
+    };
+  }, [email, profile.full_name, profile.profile_picture, profile.profile_picture_url]);
 
   return (
     <div className="flex h-screen bg-[#F7FBFC] font-sans overflow-hidden">
@@ -43,6 +122,22 @@ const AdminLayout = ({ children }) => {
 
           {/* Navigation Links */}
           <nav className="p-4 space-y-1">
+            <NavLink to="/admin/dashboard" className={navClass}>
+              <svg
+                className="w-5 h-5 mr-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
+              </svg>
+              Dashboard
+            </NavLink>
             <NavLink to="/admin/places" className={navClass}>
               <svg
                 className="w-5 h-5 mr-3"
@@ -75,6 +170,28 @@ const AdminLayout = ({ children }) => {
               </svg>
               Manage Categories
             </NavLink>
+            <NavLink to="/admin/locations" className={navClass}>
+              <svg
+                className="w-5 h-5 mr-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              Manage Locations
+            </NavLink>
             <NavLink to="/admin/reviews" className={navClass}>
               <svg
                 className="w-5 h-5 mr-3"
@@ -91,7 +208,7 @@ const AdminLayout = ({ children }) => {
               </svg>
               Manage User Reviews
             </NavLink>
-            <NavLink to="/admin/settings" className={navClass}>
+            <NavLink to="/admin/contacts" className={navClass}>
               <svg
                 className="w-5 h-5 mr-3"
                 fill="none"
@@ -102,16 +219,10 @@ const AdminLayout = ({ children }) => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="2"
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  d="M16 12H8m0 0l4-4m-4 4l4 4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              Admin Settings
+              User Contacts
             </NavLink>
           </nav>
         </div>
@@ -119,12 +230,20 @@ const AdminLayout = ({ children }) => {
         {/* User Profile Bottom */}
         <div className="p-4 border-t border-gray-200 flex items-center justify-between">
           <div className="flex items-center">
-            <div className="w-8 h-8 rounded-full bg-[#009B3E] text-white flex items-center justify-center font-bold text-sm mr-3">
-              A
+            <div className="w-8 h-8 rounded-full bg-[#009B3E] text-white flex items-center justify-center font-bold text-sm mr-3 overflow-hidden shrink-0">
+              {sidebarUser.avatar ? (
+                <img
+                  src={sidebarUser.avatar}
+                  alt={sidebarUser.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                sidebarUser.initials
+              )}
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900 leading-none">
-                Admin
+                {sidebarUser.name}
               </p>
               <p className="text-[10px] text-gray-500 mt-1">Content Admin</p>
             </div>

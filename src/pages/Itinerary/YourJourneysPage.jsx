@@ -52,6 +52,7 @@ const YourJourneysPage = () => {
   const [journeys, setJourneys] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [journeyToDelete, setJourneyToDelete] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -73,12 +74,16 @@ const YourJourneysPage = () => {
     return () => { isMounted = false; };
   }, [sortBy]);
 
-  const handleDeleteJourney = async (journeyId) => {
+  const handleDeleteJourney = async () => {
+    if (!journeyToDelete) return;
+    const journeyId = journeyToDelete.id;
     try {
       await deleteJourney(journeyId);
       setJourneys((prev) => prev.filter((j) => j.id !== journeyId));
+      setJourneyToDelete(null);
     } catch (error) {
       setErrorMessage(error?.message || "Failed to delete journey.");
+      setJourneyToDelete(null);
     }
   };
 
@@ -183,7 +188,7 @@ const YourJourneysPage = () => {
                       </button>
                       {/* Delete */}
                       <button
-                        onClick={() => handleDeleteJourney(journey.id)}
+                        onClick={() => setJourneyToDelete(journey)}
                         className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete"
                       >
@@ -225,6 +230,32 @@ const YourJourneysPage = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
         </svg>
       </Link>
+
+      {/* ── Delete Confirmation Modal ── */}
+      {journeyToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-extrabold text-gray-900 mb-2">Delete Journey?</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              This will permanently delete <strong>{journeyToDelete.title}</strong> and all its day plans.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setJourneyToDelete(null)}
+                className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteJourney}
+                className="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-600 rounded-xl text-sm font-bold text-white transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
