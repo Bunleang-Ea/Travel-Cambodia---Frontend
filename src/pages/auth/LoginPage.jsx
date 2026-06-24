@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login } from "../../services/modules/authApi";
+import { GOOGLE_CLIENT_ID } from "../../services/core/apiConfig";
+import { requestGoogleIdToken } from "../../services/core/googleIdentity";
+import { googleAuthenticate, login } from "../../services/modules/authApi";
 import { saveAuthUser } from "../../utils/authRole";
 
 const LoginPage = () => {
@@ -10,6 +12,7 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,16 +27,62 @@ const LoginPage = () => {
       saveAuthUser({
         email: data?.email || data?.user?.email || email,
         role: data?.user?.role,
+        roles: data?.roles,
+        isStaff: data?.is_staff ?? data?.user?.is_staff,
+        isSuperuser: data?.is_superuser ?? data?.user?.is_superuser,
+        token: accessToken,
+        refreshToken,
+      });
+      navigate("/");
+    } catch (err) {
+      const rawMessage = String(err?.message || "");
+      const isEmailNotRegistered =
+        err?.status === 400 &&
+        rawMessage.includes("not registered yet");
+      const isIncorrectPassword =
+        err?.status === 400 &&
+        (rawMessage.includes("Incorrect password") ||
+          rawMessage.includes("Unable to log in with provided credentials"));
+
+      setErrorMessage(
+        isEmailNotRegistered
+          ? "This email is not registered yet. Please sign up first."
+          : isIncorrectPassword
+          ? "Incorrect password. Please try again."
+          : rawMessage === "Request failed: 400"
+            ? "Invalid email or password. Please try again."
+            : rawMessage || "Invalid email or password. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setErrorMessage("");
+    setIsGoogleSubmitting(true);
+    try {
+      const idToken = await requestGoogleIdToken(GOOGLE_CLIENT_ID);
+      const data = await googleAuthenticate({ id_token: idToken });
+      const accessToken = data?.tokens?.access || data?.token || data?.access;
+      const refreshToken = data?.tokens?.refresh;
+
+      saveAuthUser({
+        email: data?.email || "",
+        role: data?.user?.role,
+        roles: data?.roles,
+        isStaff: data?.is_staff ?? data?.user?.is_staff,
+        isSuperuser: data?.is_superuser ?? data?.user?.is_superuser,
         token: accessToken,
         refreshToken,
       });
       navigate("/");
     } catch (err) {
       setErrorMessage(
-        err?.message || "Invalid email or password. Please try again.",
+        err?.message || "Google sign-in failed. Please try again.",
       );
     } finally {
-      setIsSubmitting(false);
+      setIsGoogleSubmitting(false);
     }
   };
 
@@ -188,6 +237,8 @@ const LoginPage = () => {
 
           <button
             type="button"
+            onClick={handleGoogleLogin}
+            disabled={isSubmitting || isGoogleSubmitting}
             className="w-full flex items-center justify-center border-2 border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold py-2.5 px-4 rounded-xl transition duration-200 bg-white shadow-sm hover:shadow-md"
           >
             <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
@@ -208,7 +259,7 @@ const LoginPage = () => {
                 fill="#EA4335"
               />
             </svg>
-            Google
+            {isGoogleSubmitting ? "Connecting..." : "Google"}
           </button>
 
           <div className="mt-5 text-center text-xs text-gray-700">

@@ -8,6 +8,49 @@ import {
 import AuthPromptModal from "../../components/modals/AuthPromptModal";
 import { getAuthUser } from "../../utils/authRole";
 
+const SAVED_STORAGE_KEY = "travelCambodiaSaved";
+
+const readSavedPlaceEntries = () => {
+  if (typeof window === "undefined") return [];
+
+  let raw = [];
+  try {
+    raw = JSON.parse(window.localStorage.getItem(SAVED_STORAGE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((item) => {
+      if (typeof item === "string") {
+        const placeSlug = item.trim();
+        if (!placeSlug) return null;
+        return {
+          placeSlug,
+          provinceSlug: "",
+          title: "",
+          image: "",
+          category: "Saved Place",
+        };
+      }
+
+      if (!item || typeof item !== "object") return null;
+      const placeSlug = String(item.placeSlug || item.slug || "").trim();
+      if (!placeSlug) return null;
+
+      return {
+        placeSlug,
+        provinceSlug: String(item.provinceSlug || "").trim(),
+        title: String(item.title || "").trim(),
+        image: String(item.image || "").trim(),
+        category: String(item.category || "Saved Place").trim() || "Saved Place",
+      };
+    })
+    .filter(Boolean);
+};
+
 const CategoryDetailsPage = () => {
   const { slug } = useParams();
   const [sortBy, setSortBy] = useState("popular");
@@ -17,23 +60,46 @@ const CategoryDetailsPage = () => {
   const [places, setPlaces] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-  const [savedPlaces, setSavedPlaces] = useState(
-    () => JSON.parse(window.localStorage.getItem("travelCambodiaSaved") || "[]")
-  );
+  const [savedPlaces, setSavedPlaces] = useState(() => readSavedPlaceEntries());
   const [authPrompt, setAuthPrompt] = useState(false);
   const { email } = getAuthUser();
   const isLoggedIn = Boolean(email);
 
-  const toggleSave = (placeSlug) => {
+  const isPlaceSaved = (placeSlug) =>
+    savedPlaces.some((entry) => String(entry.placeSlug) === String(placeSlug));
+
+  const toggleSave = (place) => {
     if (!isLoggedIn) {
       setAuthPrompt(true);
       return;
     }
     setSavedPlaces((prev) => {
-      const next = prev.includes(placeSlug)
-        ? prev.filter((s) => s !== placeSlug)
-        : [...prev, placeSlug];
-      window.localStorage.setItem("travelCambodiaSaved", JSON.stringify(next));
+      const normalized = Array.isArray(prev)
+        ? prev.filter((entry) => entry && entry.placeSlug)
+        : [];
+      const placeSlug = String(place?.slug || "").trim();
+      if (!placeSlug) return normalized;
+
+      const exists = normalized.some(
+        (entry) => String(entry.placeSlug) === placeSlug,
+      );
+
+      const next = exists
+        ? normalized.filter((entry) => String(entry.placeSlug) !== placeSlug)
+        : [
+            ...normalized.filter(
+              (entry) => String(entry.placeSlug) !== placeSlug,
+            ),
+            {
+              placeSlug,
+              provinceSlug: String(place?.provinceSlug || "").trim(),
+              title: String(place?.title || "").trim(),
+              image: String(place?.image || "").trim(),
+              category: String(place?.category || "Saved Place").trim() || "Saved Place",
+            },
+          ];
+
+      window.localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
   };
@@ -238,9 +304,9 @@ const CategoryDetailsPage = () => {
                 />
 
                 <button
-                onClick={() => toggleSave(place.slug)}
+                onClick={() => toggleSave(place)}
                 className={`absolute top-4 right-4 p-2.5 rounded-full shadow-md backdrop-blur-sm transition-all duration-300 ${
-                  savedPlaces.includes(place.slug)
+                  isPlaceSaved(place.slug)
                     ? "bg-white text-red-500"
                     : "bg-white/70 text-gray-500 hover:bg-white hover:text-red-500"
                 }`}

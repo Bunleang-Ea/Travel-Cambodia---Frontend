@@ -87,7 +87,7 @@ const Navbar = () => {
               to="/locations"
               className={({ isActive }) =>
                 `text-lg py-1 transition-colors ${
-                  isActive
+                  (isActive || location.pathname.startsWith("/destinations") || location.pathname.startsWith("/details"))
                     ? "text-[#009B3E] font-semibold border-b-2 border-[#009B3E]"
                     : "text-gray-500 hover:text-gray-900 font-medium"
                 }`
@@ -99,7 +99,7 @@ const Navbar = () => {
               to="/categories"
               className={({ isActive }) =>
                 `text-lg py-1 transition-colors ${
-                  isActive
+                  (isActive || location.pathname.startsWith("/categories"))
                     ? "text-[#009B3E] font-semibold border-b-2 border-[#009B3E]"
                     : "text-gray-500 hover:text-gray-900 font-medium"
                 }`
@@ -111,13 +111,25 @@ const Navbar = () => {
               to="/itinerary"
               className={({ isActive }) =>
                 `text-lg py-1 transition-colors ${
-                  isActive
+                  (isActive || location.pathname.startsWith("/itinerary"))
                     ? "text-[#009B3E] font-semibold border-b-2 border-[#009B3E]"
                     : "text-gray-500 hover:text-gray-900 font-medium"
                 }`
               }
             >
               Itinerary
+            </NavLink>
+            <NavLink
+              to="/about"
+              className={({ isActive }) =>
+                `text-lg py-1 transition-colors ${
+                  isActive
+                    ? "text-[#009B3E] font-semibold border-b-2 border-[#009B3E]"
+                    : "text-gray-500 hover:text-gray-900 font-medium"
+                }`
+              }
+            >
+              About Us
             </NavLink>
             <NavLink
               to="/contact"
@@ -229,16 +241,29 @@ const Navbar = () => {
         {/* ── Mobile Drawer ── */}
         {isMenuOpen && (
           <div className="lg:hidden border-t border-gray-100 bg-white/98 backdrop-blur-sm px-4 pb-5 pt-3 space-y-1 shadow-md">
-            {["/ Home", "/locations Locations", "/categories Categories", "/itinerary Itinerary", "/contact Contact Us"].map((entry) => {
-              const [to, label] = entry.split(" ");
+            {["/ Home", "/locations Locations", "/categories Categories", "/itinerary Itinerary", "/about About Us", "/contact Contact Us"].map((entry) => {
+              const firstSpaceIndex = entry.indexOf(" ");
+              const to = entry.substring(0, firstSpaceIndex);
+              const label = entry.substring(firstSpaceIndex + 1);
+              
+              const isLinkActive = (() => {
+                if (to === "/") return location.pathname === "/";
+                if (to === "/locations") {
+                  return location.pathname === "/locations" || 
+                         location.pathname.startsWith("/destinations") || 
+                         location.pathname.startsWith("/details");
+                }
+                return location.pathname.startsWith(to);
+              })();
+
               return (
                 <NavLink
                   key={to}
                   to={to}
                   end={to === "/"}
-                  className={({ isActive }) =>
+                  className={() =>
                     `block px-4 py-3 rounded-xl text-base font-medium transition-colors ${
-                      isActive
+                      isLinkActive
                         ? "bg-green-50 text-[#009B3E] font-semibold"
                         : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     }`

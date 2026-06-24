@@ -1,22 +1,52 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { resetPassword } from "../../services/modules/authApi";
 
 const ResetPassword = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const email = location.state?.email || "";
+  const otp = location.state?.otp || "";
+
   const [passwords, setPasswords] = useState({
     new: "",
     confirm: "",
   });
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Passwords match validation could go here before API call
-    if (passwords.new !== passwords.confirm) {
-      alert("Passwords do not match!");
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!email || !otp) {
+      setErrorMessage("OTP session expired. Please request a new OTP from Forgot Password.");
       return;
     }
-    console.log("Password reset requested");
+
+    if (passwords.new !== passwords.confirm) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await resetPassword({
+        email,
+        otp,
+        new_password: passwords.new,
+      });
+      setSuccessMessage("Password reset successful. Redirecting to login...");
+      setTimeout(() => navigate("/login"), 1200);
+    } catch (err) {
+      setErrorMessage(err?.message || "Failed to reset password. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -47,6 +77,18 @@ const ResetPassword = () => {
             Use a strong password with at least 8 characters, including a mix of
             letters and numbers.
           </div>
+
+          {errorMessage && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">
+              {errorMessage}
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 font-medium">
+              {successMessage}
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -171,9 +213,10 @@ const ResetPassword = () => {
             {/* Submit Button */}
             <button
               type="submit"
+              disabled={isSubmitting}
               className="w-full mt-5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-md hover:shadow-lg transition duration-300"
             >
-              Reset Password
+              {isSubmitting ? "Resetting..." : "Reset Password"}
             </button>
           </form>
 

@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { getProvinces } from "../../services/modules/travelApi";
 
 const LocationsPage = () => {
-  const [activeFilter, setActiveFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [destinations, setDestinations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -12,14 +11,14 @@ const LocationsPage = () => {
   useEffect(() => {
     let isMounted = true;
 
-    const loadProvinces = async () => {
+    const loadData = async () => {
       setIsLoading(true);
       setErrorMessage("");
 
       try {
-        const data = await getProvinces();
+        const provincesData = await getProvinces();
         if (!isMounted) return;
-        setDestinations(Array.isArray(data) ? data : []);
+        setDestinations(Array.isArray(provincesData) ? provincesData : []);
       } catch (error) {
         if (!isMounted) return;
         setErrorMessage(error?.message || "Failed to load destinations.");
@@ -28,28 +27,21 @@ const LocationsPage = () => {
       }
     };
 
-    loadProvinces();
+    loadData();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  // Fixed: use exact singular category names matching travelData
-  const filters = ["All", "Temple", "Nature", "Coastal", "Urban"];
-
   const filteredDestinations = destinations.filter((dest) => {
-    const matchesFilter =
-      activeFilter === "All" ||
-      String(dest.category || "").toLowerCase() === activeFilter.toLowerCase();
-
     const q = searchTerm.trim().toLowerCase();
     const matchesSearch =
       q === "" ||
       String(dest.name || "").toLowerCase().includes(q) ||
       String(dest.description || "").toLowerCase().includes(q);
 
-    return matchesFilter && matchesSearch;
+    return matchesSearch;
   });
 
   return (
@@ -130,22 +122,8 @@ const LocationsPage = () => {
           </button>
         </div>
 
-        {/* 3. Filter Pills */}
-        <div className="flex flex-wrap gap-3 mt-10 mb-8">
-          {filters.map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors border-2 ${
-                activeFilter === filter
-                  ? "bg-gradient-to-r from-green-600 to-green-700 border-green-600 text-white shadow-sm"
-                  : "bg-white border-gray-300 text-gray-600 hover:border-green-500 hover:text-green-700"
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
+        {/* Dynamic margin space instead of filter pills */}
+        <div className="pt-12"></div>
 
         {errorMessage ? (
           <div className="mb-8 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 font-medium">
@@ -174,13 +152,6 @@ const LocationsPage = () => {
                   alt={dest.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
-
-                {/* Category Badge */}
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full border border-gray-200">
-                  <span className="text-[10px] font-extrabold text-[#009B3E] uppercase tracking-wider">
-                    {dest.category}
-                  </span>
-                </div>
               </div>
 
               {/* Card Content */}

@@ -1,401 +1,727 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  createAdminPlace,
+  getAdminCategories,
+  updateAdminPlace,
+  getAdminLocations,
+} from "../../services/modules/adminApi";
+import { clearTravelCache, toAbsoluteMediaUrl } from "../../services/modules/travelApi";
 
 const AddDestinationPage = () => {
-  // Simple state to manage interactive UI elements
-  const [selectedCategory, setSelectedCategory] = useState("Temple");
-  const [isFeatured, setIsFeatured] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const portalBasePath = location.pathname.startsWith("/super-admin")
+    ? "/super-admin"
+    : "/admin";
+  const editingPlace = location.state?.mode === "edit" ? location.state?.place : null;
 
-  const categories = ["Temple", "Nature", "Beach", "Urban", "History"];
+  const [categories, setCategories] = useState([]);
+  const [provinces, setProvinces] = useState([]);
+  const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
+  const provinceContainerRef = useRef(null);
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [previewItems, setPreviewItems] = useState([]);
+
+  const [formData, setFormData] = useState({
+    name: "",
+    locationName: "",
+    categoryId: "",
+    description: "",
+    mapLink: "",
+    contactInfo: "",
+    bestTimeToVisit: "",
+    recommendedDuration: "",
+    dressCode: "",
+    openingHours: "",
+    publishingStatus: "Draft",
+    isFeatured: false,
+  });
+
+  const getPlaceImageUrls = (place) => {
+    const galleryImages = Array.isArray(place?.gallery_images)
+      ? place.gallery_images
+      : [];
+    const fromMainImage = toAbsoluteMediaUrl(String(place?.image || "").trim());
+    const fromGallery = galleryImages
+      .map((image) => toAbsoluteMediaUrl(String(image?.image_url || "").trim()))
+      .filter(Boolean);
+
+    return [fromMainImage, ...fromGallery].filter(
+      (url, index, source) => Boolean(url) && source.indexOf(url) === index,
+    );
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const load = async () => {
+      try {
+        const [categoryData, provinceData] = await Promise.all([
+          getAdminCategories(),
+          getAdminLocations(),
+        ]);
+        if (!isMounted) return;
+        setCategories(Array.isArray(categoryData) ? categoryData : []);
+        setProvinces(Array.isArray(provinceData) ? provinceData : []);
+      } catch (error) {
+        if (!isMounted) return;
+        setErrorMessage(error?.message || "Failed to load categories/provinces.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        provinceContainerRef.current &&
+        !provinceContainerRef.current.contains(event.target)
+      ) {
+        setShowProvinceDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredProvinces = useMemo(() => {
+    const query = String(formData.locationName || "").trim().toLowerCase();
+    if (!query) {
+      return provinces;
+    }
+    return provinces.filter((prov) =>
+      String(prov.name || "").toLowerCase().includes(query)
+    );
+  }, [provinces, formData.locationName]);
+
+  useEffect(() => {
+    if (!editingPlace) return;
+    setFormData({
+      name: String(editingPlace?.name || ""),
+      locationName: String(editingPlace?.location_name || ""),
+      categoryId: editingPlace?.category ? String(editingPlace.category) : "",
+      description: String(editingPlace?.description || ""),
+      mapLink: String(editingPlace?.map_link || ""),
+      contactInfo: String(editingPlace?.contact_info || ""),
+      bestTimeToVisit: String(editingPlace?.best_time_to_visit || ""),
+      recommendedDuration: String(editingPlace?.recommended_duration || ""),
+      dressCode: String(editingPlace?.dress_code || ""),
+      openingHours: String(editingPlace?.opening_hours || ""),
+      publishingStatus: String(editingPlace?.publishing_status || "Draft"),
+      isFeatured: Boolean(editingPlace?.is_featured),
+    });
+    const existingUrls = getPlaceImageUrls(editingPlace);
+    setPreviewItems(
+      existingUrls.map((url) => ({
+        id: url,
+        url: url,
+        file: null,
+        isExisting: true,
+      }))
+    );
+  }, [editingPlace]);
+
+  useEffect(
+    () => () => {
+      previewItems.forEach((item) => {
+        if (item.url.startsWith("blob:")) {
+          URL.revokeObjectURL(item.url);
+        }
+      });
+    },
+    [previewItems],
+  );
+
+  // Support pasting images from clipboard one by one
+  useEffect(() => {
+    const handleGlobalPaste = (event) => {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+              setErrorMessage("Pasted image exceeds 5 MB limit.");
+              return;
+            }
+            setErrorMessage("");
+            setSuccessMessage("");
+            const newItem = {
+              id: `pasted-${Date.now()}-${Math.random()}`,
+              url: URL.createObjectURL(file),
+              file: file,
+              isExisting: false,
+            };
+            setPreviewItems((prev) => [...prev, newItem]);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => window.removeEventListener("paste", handleGlobalPaste);
+  }, []);
+
+  const pageTitle = useMemo(
+    () => (editingPlace ? "Edit Destination" : "Add New Destination"),
+    [editingPlace],
+  );
+
+  const submitLabel = useMemo(
+    () => (editingPlace ? "Save Changes" : "Create Destination"),
+    [editingPlace],
+  );
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleImageChange = (event) => {
+    const nextFiles = Array.from(event.target.files || []);
+    if (nextFiles.length === 0) return;
+
+    for (const file of nextFiles) {
+      if (!String(file.type || "").startsWith("image/")) {
+        setErrorMessage("Please select valid image files only.");
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        setErrorMessage("Each image must not exceed 5 MB.");
+        return;
+      }
+    }
+
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const newItems = nextFiles.map((file) => ({
+      id: `${file.name}-${Date.now()}-${Math.random()}`,
+      url: URL.createObjectURL(file),
+      file: file,
+      isExisting: false,
+    }));
+
+    setPreviewItems((prev) => [...prev, ...newItems]);
+  };
+
+  const handleDeleteItem = (idToDelete) => {
+    setPreviewItems((prev) => {
+      const item = prev.find((x) => x.id === idToDelete);
+      if (item && item.url.startsWith("blob:")) {
+        URL.revokeObjectURL(item.url);
+      }
+      return prev.filter((x) => x.id !== idToDelete);
+    });
+  };
+
+  const [isDragOverCover, setIsDragOverCover] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!formData.name.trim()) {
+      setErrorMessage("Destination name is required.");
+      return;
+    }
+    if (!formData.locationName.trim()) {
+      setErrorMessage("City / province is required.");
+      return;
+    }
+
+    const matchedProvince = provinces.find(
+      (prov) => String(prov.name || "").trim().toLowerCase() === formData.locationName.trim().toLowerCase()
+    );
+
+    const payload = {
+      name: formData.name.trim(),
+      description: formData.description.trim(),
+      category: formData.categoryId ? Number(formData.categoryId) : null,
+      location: matchedProvince ? matchedProvince.id : null,
+      location_name_input: matchedProvince ? "" : formData.locationName.trim(),
+      publishing_status: formData.publishingStatus,
+      is_featured: Boolean(formData.isFeatured),
+      map_link: formData.mapLink.trim() || null,
+      contact_info: formData.contactInfo.trim() || null,
+      best_time_to_visit: formData.bestTimeToVisit.trim() || null,
+      recommended_duration: formData.recommendedDuration.trim() || null,
+      dress_code: formData.dressCode.trim() || null,
+      opening_hours: formData.openingHours.trim() || null,
+    };
+
+    const requestPayload = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === null || value === undefined) {
+        requestPayload.append(key, "");
+        return;
+      }
+
+      if (typeof value === "boolean") {
+        requestPayload.append(key, value ? "true" : "false");
+        return;
+      }
+
+      requestPayload.append(key, String(value));
+    });
+
+    if (previewItems.length > 0) {
+      const coverItem = previewItems[0];
+      if (coverItem.file) {
+        requestPayload.append("main_image", coverItem.file);
+      } else if (coverItem.isExisting) {
+        requestPayload.append("main_image_url", coverItem.url);
+      }
+
+      const galleryItems = previewItems.slice(1);
+      galleryItems.forEach((item) => {
+        if (item.file) {
+          requestPayload.append("gallery_image_files", item.file);
+        }
+      });
+    }
+
+    if (editingPlace) {
+      const keptExistingUrls = previewItems.filter((item) => item.isExisting).map((item) => item.url);
+      if (keptExistingUrls.length === 0) {
+        requestPayload.append("keep_gallery_image_urls", "");
+      } else {
+        keptExistingUrls.forEach((url) => {
+          requestPayload.append("keep_gallery_image_urls", url);
+        });
+      }
+    }
+
+    setIsSaving(true);
+    try {
+      if (editingPlace) {
+        await updateAdminPlace(editingPlace.place_id, requestPayload);
+        clearTravelCache();
+        setSuccessMessage("Destination updated successfully.");
+      } else {
+        await createAdminPlace(requestPayload);
+        clearTravelCache();
+        setSuccessMessage("Destination created successfully.");
+        setFormData({
+          name: "",
+          locationName: "",
+          categoryId: "",
+          description: "",
+          mapLink: "",
+          contactInfo: "",
+          bestTimeToVisit: "",
+          recommendedDuration: "",
+          dressCode: "",
+          openingHours: "",
+          publishingStatus: "Draft",
+          isFeatured: false,
+        });
+        setPreviewItems([]);
+      }
+    } catch (error) {
+      setErrorMessage(error?.message || "Failed to save destination.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-      {/* Breadcrumbs & Header */}
+    <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
       <div className="mb-8">
-        <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2 flex items-center">
-          <span>Destinations</span>
-          <svg
-            className="w-3 h-3 mx-2"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
-          <span className="text-[#009B3E]">Add New</span>
-        </div>
         <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-2">
-          Add New Destination
+          {pageTitle}
         </h2>
         <p className="text-sm text-gray-500">
-          Populate the fields below to showcase a new Cambodian wonder on the
-          platform.
+          Create or update destination details for the public portal.
         </p>
       </div>
 
-      {/* Main Form Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        {/* LEFT COLUMN (Main Form Fields) */}
-        <div className="xl:col-span-2 space-y-8">
-          {/* 1. General Information Card */}
-          <div className="bg-white rounded-[1.5rem] shadow-[0_12px_30px_rgba(15,23,42,0.07)] border border-gray-200 p-6 sm:p-8">
-            {/* Card Header */}
-            <div className="flex items-center mb-8">
-              <div className="w-8 h-8 bg-emerald-50 text-[#009B3E] rounded-lg flex items-center justify-center mr-3">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2.5"
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">
-                General Information
-              </h3>
-            </div>
+      {errorMessage && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">
+          {errorMessage}
+        </div>
+      )}
+      {successMessage && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 font-medium">
+          {successMessage}
+        </div>
+      )}
 
-            <form className="space-y-6">
-              {/* Row 1: Name & Location */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
-                    Destination Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Angkor Wat Temple"
-                    className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:bg-white transition-all text-sm font-medium"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
-                    City / Province
-                  </label>
-                  <div className="relative">
-                    <select className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:bg-white transition-all text-sm font-medium appearance-none cursor-pointer">
-                      <option value="">Select Location</option>
-                      <option value="siem-reap">Siem Reap</option>
-                      <option value="phnom-penh">Phnom Penh</option>
-                      <option value="kampot">Kampot</option>
-                      <option value="sihanoukville">Sihanoukville</option>
-                    </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-400">
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 2: Category */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-3">
-                  Category
-                </label>
-                <div className="flex flex-wrap gap-3">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`px-5 py-2 rounded-lg text-sm font-bold transition-colors border ${
-                        selectedCategory === cat
-                          ? "bg-white border-[#009B3E] text-[#009B3E] shadow-sm"
-                          : "bg-white border-gray-200 text-gray-500 hover:border-gray-300"
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Row 3: Description */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
-                  Description
-                </label>
-                <textarea
-                  rows="6"
-                  placeholder="Provide a detailed editorial description for the destination..."
-                  className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:bg-white transition-all text-sm font-medium resize-none"
-                ></textarea>
-              </div>
-            </form>
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white rounded-[1.5rem] shadow-[0_12px_30px_rgba(15,23,42,0.07)] border border-gray-200 p-6 sm:p-8 space-y-6"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Destination Name
+            </label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="e.g. Angkor Wat Temple"
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:bg-white transition-all text-sm font-medium"
+            />
           </div>
 
-          {/* 2. Gallery & Photos Card */}
-          <div className="bg-white rounded-[1.5rem] shadow-[0_12px_30px_rgba(15,23,42,0.07)] border border-gray-200 p-6 sm:p-8">
-            {/* Card Header */}
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center">
-                <div className="w-8 h-8 bg-emerald-50 text-[#009B3E] rounded-lg flex items-center justify-center mr-3">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+          <div className="relative" ref={provinceContainerRef}>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              City / Province
+            </label>
+            <input
+              type="text"
+              name="locationName"
+              value={formData.locationName}
+              onChange={handleChange}
+              onFocus={() => setShowProvinceDropdown(true)}
+              placeholder="e.g. Siem Reap"
+              autoComplete="off"
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:bg-white transition-all text-sm font-medium"
+            />
+            {showProvinceDropdown && filteredProvinces.length > 0 && (
+              <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-[0_12px_30px_rgba(15,23,42,0.08)] py-2">
+                {filteredProvinces.map((prov) => (
+                  <button
+                    key={prov.slug}
+                    type="button"
+                    onClick={() => {
+                      setFormData((prev) => ({ ...prev, locationName: prov.name }));
+                      setShowProvinceDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-green-50 hover:text-[#009B3E] transition-colors text-sm font-semibold text-gray-700"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold text-gray-900">
-                  Gallery & Photos
-                </h3>
+                    {prov.name}
+                  </button>
+                ))}
               </div>
-              <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">
-                Max 5MB per file
-              </span>
-            </div>
-
-            {/* Photo Upload Grid */}
-            <div className="flex flex-wrap gap-4">
-              {/* Main Upload Box */}
-              <div className="w-[120px] h-[120px] rounded-2xl border-2 border-dashed border-gray-200 bg-[#F7FBFC] flex flex-col items-center justify-center cursor-pointer hover:border-[#009B3E] hover:bg-emerald-50 transition-colors group">
-                <svg
-                  className="w-6 h-6 text-gray-400 mb-2 group-hover:text-[#009B3E] transition-colors"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-                <span className="text-[10px] font-bold text-gray-400 group-hover:text-[#009B3E]">
-                  Upload Main
-                </span>
-              </div>
-
-              {/* Filled Box Mockup */}
-              <div className="w-[120px] h-[120px] rounded-2xl overflow-hidden relative group cursor-pointer">
-                <img
-                  src="/images/historic-statues-angkor-thom-siem-reap-cambodia.jpg"
-                  alt="Uploaded thumbnail"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </div>
-              </div>
-
-              {/* Empty Add Boxes */}
-              <div className="w-[120px] h-[120px] rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer hover:border-gray-300 transition-colors">
-                <svg
-                  className="w-6 h-6 text-gray-300"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-              </div>
-              <div className="w-[120px] h-[120px] rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer hover:border-gray-300 transition-colors">
-                <svg
-                  className="w-6 h-6 text-gray-300"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* RIGHT COLUMN (Settings & Status) */}
-        <div className="xl:col-span-1 space-y-8">
-          {/* 3. Map Placement Card */}
-          <div className="bg-white rounded-[1.5rem] shadow-[0_12px_30px_rgba(15,23,42,0.07)] border border-gray-200 p-6 sm:p-8">
-            <div className="flex items-center mb-6">
-              <div className="w-8 h-8 bg-emerald-50 text-[#009B3E] rounded-lg flex items-center justify-center mr-3">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2.5"
-                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2.5"
-                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-sm font-extrabold text-gray-900 uppercase tracking-widest">
-                Map Placement
-              </h3>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-2">
-                  Google Maps Embed URL
-                </label>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3 text-gray-400">
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                      />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Paste iframe src link here..."
-                    className="w-full pl-9 pr-4 py-2.5 bg-[#F7FBFC] border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-xs font-medium"
-                  />
-                </div>
-              </div>
-
-              {/* Map Placeholder */}
-              <div className="w-full h-[140px] bg-gray-100 rounded-xl overflow-hidden relative">
-                <img
-                  src="/images/george-bakos-OvEr7BwXxxg-unsplash.jpg"
-                  alt="Map Placeholder"
-                  className="w-full h-full object-cover opacity-50 grayscale"
-                />
-              </div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Best Time To Visit
+            </label>
+            <input
+              type="text"
+              name="bestTimeToVisit"
+              value={formData.bestTimeToVisit}
+              onChange={handleChange}
+              placeholder="e.g. November to March"
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium"
+            />
           </div>
 
-          {/* 4. Publishing Status Card */}
-          <div className="bg-white rounded-[1.5rem] shadow-[0_12px_30px_rgba(15,23,42,0.07)] border border-gray-200 p-6 sm:p-8">
-            <h3 className="text-sm font-extrabold text-gray-900 uppercase tracking-widest mb-6">
-              Publishing Status
-            </h3>
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Recommended Duration
+            </label>
+            <input
+              type="text"
+              name="recommendedDuration"
+              value={formData.recommendedDuration}
+              onChange={handleChange}
+              placeholder="e.g. 3 - 4 Hours"
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium"
+            />
+          </div>
+        </div>
 
-            <div className="space-y-6">
-              {/* Status Badge */}
-              <div className="flex items-center justify-between bg-emerald-50 rounded-lg p-3 border border-emerald-100">
-                <div className="flex items-center">
-                  <div className="w-2 h-2 rounded-full bg-[#009B3E] mr-2"></div>
-                  <span className="text-sm font-bold text-[#009B3E]">
-                    Draft Status
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Dress Code
+            </label>
+            <input
+              type="text"
+              name="dressCode"
+              value={formData.dressCode}
+              onChange={handleChange}
+              placeholder="e.g. Shoulders and knees covered"
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Opening Hours (Text)
+            </label>
+            <input
+              type="text"
+              name="openingHours"
+              value={formData.openingHours}
+              onChange={handleChange}
+              placeholder="e.g. Daily: 7:00 AM - 5:00 PM"
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Category
+            </label>
+            <select
+              name="categoryId"
+              value={formData.categoryId}
+              onChange={handleChange}
+              disabled={isLoading}
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium"
+            >
+              <option value="">No Category</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Publishing Status
+            </label>
+            <select
+              name="publishingStatus"
+              value={formData.publishingStatus}
+              onChange={handleChange}
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium"
+            >
+              <option value="Draft">Draft</option>
+              <option value="Published">Published</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+            Description
+          </label>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            rows={6}
+            placeholder="Describe this destination..."
+            className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium resize-none"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Destination Images
+            </label>
+            <input
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              onChange={handleImageChange}
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-emerald-100 file:text-emerald-700 file:font-semibold"
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              Upload JPG, PNG, or WEBP (max 5 MB each). You can also paste images directly from your clipboard (Ctrl+V) one by one. Drag and drop grid images onto the Main Cover to set them as the primary cover, or delete individual photos.
+            </p>
+            {previewItems.length > 0 ? (
+              <p className="mt-1 text-xs font-medium text-emerald-700">
+                Total images: {previewItems.length} ({previewItems.filter(x => !x.isExisting).length} new)
+              </p>
+            ) : null}
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Image Previews
+            </label>
+            <div className="min-h-[150px] w-full bg-[#F7FBFC] rounded-xl border border-dashed border-gray-300 overflow-hidden p-3">
+              {previewItems.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {/* Main Cover Image */}
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDragEnter={() => setIsDragOverCover(true)}
+                    onDragLeave={() => setIsDragOverCover(false)}
+                    onDrop={(e) => {
+                      setIsDragOverCover(false);
+                      const fromIndexStr = e.dataTransfer.getData("text/plain");
+                      const fromIndex = Number(fromIndexStr);
+                      if (!isNaN(fromIndex) && fromIndex > 0 && fromIndex < previewItems.length) {
+                        setPreviewItems((prev) => {
+                          const next = [...prev];
+                          const [movedItem] = next.splice(fromIndex, 1);
+                          next.unshift(movedItem);
+                          return next;
+                        });
+                      }
+                    }}
+                    className={`relative h-[200px] w-full bg-gray-100 rounded-lg overflow-hidden transition-all duration-200 border-2 ${
+                      isDragOverCover ? "border-[#009B3E] scale-[0.99]" : "border-transparent"
+                    }`}
+                  >
+                    <img
+                      src={previewItems[0].url}
+                      alt="Main Cover Preview"
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute top-3 left-3 bg-emerald-600 text-white text-[10px] font-extrabold uppercase px-2 py-1 rounded shadow-sm tracking-wider z-10">
+                      Main Cover
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteItem(previewItems[0].id)}
+                      className="absolute top-3 right-3 w-8 h-8 bg-black/50 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition-colors shadow-lg z-10"
+                      title="Remove cover image"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                    {isDragOverCover && (
+                      <div className="absolute inset-0 bg-[#009B3E]/20 backdrop-blur-[1px] flex items-center justify-center z-20 pointer-events-none">
+                        <span className="bg-white/90 text-[#009B3E] font-bold text-xs px-3 py-1.5 rounded-full shadow border border-[#009B3E]/30">
+                          Drop here to set as Cover
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Other Gallery Images */}
+                  {previewItems.length > 1 ? (
+                    <div>
+                      <span className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">
+                        Gallery Images (Drag to cover to swap)
+                      </span>
+                      <div className="grid grid-cols-4 gap-2">
+                        {previewItems.slice(1).map((item, index) => {
+                          const actualIndex = index + 1;
+                          return (
+                            <div
+                              key={item.id}
+                              draggable="true"
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/plain", String(actualIndex));
+                              }}
+                              className="relative h-[64px] rounded-lg overflow-hidden bg-gray-100 group cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-[#009B3E] transition-all"
+                            >
+                              <img
+                                src={item.url}
+                                alt={`Gallery preview ${actualIndex}`}
+                                className="h-full w-full object-cover"
+                              />
+                              <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1 py-0.5 rounded font-mono">
+                                #{actualIndex}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteItem(item.id)}
+                                className="absolute top-1 right-1 w-5 h-5 bg-black/50 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition-colors shadow-lg opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                title="Remove gallery image"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="h-[134px] w-full flex items-center justify-center">
+                  <span className="text-xs text-gray-400 font-medium">
+                    No images selected
                   </span>
                 </div>
-                <button className="text-[10px] font-extrabold text-[#009B3E] uppercase tracking-widest hover:underline">
-                  Change
-                </button>
-              </div>
-
-              {/* Visibility Row */}
-              <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                <span className="text-sm text-gray-500 font-medium">
-                  Visibility
-                </span>
-                <span className="text-sm font-bold text-gray-900">Public</span>
-              </div>
-
-              {/* Featured Post Toggle */}
-              <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-gray-500 font-medium">
-                  Featured Post
-                </span>
-
-                {/* Custom Toggle Switch */}
-                <button
-                  type="button"
-                  onClick={() => setIsFeatured(!isFeatured)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                    isFeatured ? "bg-[#009B3E]" : "bg-gray-200"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                      isFeatured ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-4 space-y-3 flex flex-col">
-                <button className="w-full py-3.5 bg-[#009B3E] hover:bg-green-700 text-white font-bold rounded-xl shadow-sm transition-colors text-sm">
-                  Add Destination
-                </button>
-                <button className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-50 transition-colors text-sm">
-                  Save as Draft
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Map Link
+            </label>
+            <input
+              type="url"
+              name="mapLink"
+              value={formData.mapLink}
+              onChange={handleChange}
+              placeholder="https://maps.google.com/..."
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
+              Contact Info
+            </label>
+            <input
+              type="text"
+              name="contactInfo"
+              value={formData.contactInfo}
+              onChange={handleChange}
+              placeholder="Phone or email"
+              className="w-full px-4 py-3 bg-[#F7FBFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] transition-all text-sm font-medium"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <label className="flex items-center text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              checked={formData.isFeatured}
+              onChange={(event) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  isFeatured: event.target.checked,
+                }))
+              }
+              className="mr-2 h-4 w-4"
+            />
+            Featured destination
+          </label>
+        </div>
+
+        <div className="pt-4 flex items-center justify-end gap-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={() => navigate(`${portalBasePath}/places`)}
+            className="text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors px-4 py-2.5"
+          >
+            Back to List
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="bg-[#009B3E] hover:bg-green-700 text-white text-sm font-bold py-2.5 px-8 rounded-lg shadow-sm transition duration-200 disabled:opacity-60"
+          >
+            {isSaving ? "Saving..." : submitLabel}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

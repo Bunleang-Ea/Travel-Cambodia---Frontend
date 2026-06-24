@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { register } from "../../services/modules/authApi";
+import { GOOGLE_CLIENT_ID } from "../../services/core/apiConfig";
+import { requestGoogleIdToken } from "../../services/core/googleIdentity";
+import { googleAuthenticate, register } from "../../services/modules/authApi";
+import { saveAuthUser } from "../../utils/authRole";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -11,6 +14,7 @@ const RegisterPage = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -41,7 +45,21 @@ const RegisterPage = () => {
         },
       });
     } catch (err) {
-      setErrorMessage(err?.message || "Registration failed. Please try again.");
+      console.error("Registration error:", err);
+      console.error("Error data:", err?.data);
+      
+      // Extract detailed error message from backend
+      let detailedMessage = err?.message || "Registration failed. Please try again.";
+      if (err?.data?.errors) {
+        const errorFields = Object.entries(err.data.errors);
+        if (errorFields.length > 0) {
+          const [field, messages] = errorFields[0];
+          const fieldError = Array.isArray(messages) ? messages[0] : messages;
+          detailedMessage = `${field}: ${fieldError}`;
+        }
+      }
+      
+      setErrorMessage(detailedMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -91,6 +109,34 @@ const RegisterPage = () => {
       )}
     </button>
   );
+
+  const handleGoogleRegister = async () => {
+    setErrorMessage("");
+    setIsGoogleSubmitting(true);
+    try {
+      const idToken = await requestGoogleIdToken(GOOGLE_CLIENT_ID);
+      const data = await googleAuthenticate({ id_token: idToken });
+      const accessToken = data?.tokens?.access || data?.token || data?.access;
+      const refreshToken = data?.tokens?.refresh;
+
+      saveAuthUser({
+        email: data?.email || "",
+        role: data?.user?.role,
+        roles: data?.roles,
+        isStaff: data?.is_staff ?? data?.user?.is_staff,
+        isSuperuser: data?.is_superuser ?? data?.user?.is_superuser,
+        token: accessToken,
+        refreshToken,
+      });
+      navigate("/");
+    } catch (err) {
+      setErrorMessage(
+        err?.message || "Google sign-in failed. Please try again.",
+      );
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F7FBFC]">
@@ -180,6 +226,9 @@ const RegisterPage = () => {
                   label={showPassword ? "Hide password" : "Show password"}
                 />
               </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Password must contain: uppercase, lowercase, number, and special character (!@#$%^&*...)
+              </p>
             </div>
 
             {/* Confirm Password */}
@@ -224,6 +273,8 @@ const RegisterPage = () => {
           {/* Google */}
           <button
             type="button"
+            onClick={handleGoogleRegister}
+            disabled={isSubmitting || isGoogleSubmitting}
             className="w-full flex items-center justify-center border-2 border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold py-2 px-4 rounded-xl transition duration-200 bg-white shadow-sm hover:shadow-md"
           >
             <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
@@ -244,7 +295,7 @@ const RegisterPage = () => {
                 fill="#EA4335"
               />
             </svg>
-            Google
+            {isGoogleSubmitting ? "Connecting..." : "Google"}
           </button>
 
           {/* Footer links */}

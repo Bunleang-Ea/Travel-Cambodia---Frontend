@@ -1,10 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   getJourneyById,
   updateJourney,
   deleteJourney,
+  createItineraryItem,
+  deleteItineraryItem,
+  updateItineraryItem,
 } from "../../services/modules/itineraryApi";
+import { getProvinces } from "../../services/modules/travelApi";
 import ItinerarySidebar from "../../components/layout/ItinerarySidebar";
 
 const STATUS_STYLES = {
@@ -27,72 +31,158 @@ const JourneyDetailPage = () => {
   const [addingPlaceDayIdx, setAddingPlaceDayIdx] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Suggestions state
+  const [provincePlaces, setProvincePlaces] = useState([]);
+  const [showPlacesDropdown, setShowPlacesDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // ---------- Load journey data ----------
+  const loadJourney = async (showSpinner = true) => {
+    if (showSpinner) setIsLoading(true);
+    setErrorMessage("");
+    try {
+      const data = await getJourneyById(journeyId);
+      setJourney(data);
+    } catch (err) {
+      setErrorMessage(err?.message || "Failed to load journey.");
+    } finally {
+      if (showSpinner) setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let isMounted = true;
-    const load = async () => {
-      setIsLoading(true);
-      setErrorMessage("");
-      try {
-        const data = await getJourneyById(journeyId);
-        if (isMounted) setJourney(data);
-      } catch (err) {
-        if (isMounted) setErrorMessage(err?.message || "Failed to load journey.");
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    };
-    load();
-    return () => { isMounted = false; };
+    loadJourney(true);
   }, [journeyId]);
 
-  // ── Day notes ──────────────────────────────────────
+  // ---------- Load suggestions from province of the destination ----------
+  useEffect(() => {
+    if (!journey || !journey.destination) return;
+    let isMounted = true;
+    const loadPlaces = async () => {
+      try {
+        const provinces = await getProvinces();
+        if (!isMounted) return;
+        const destLower = journey.destination.trim().toLowerCase();
+
+        // Find matching province
+        let matchedProvince = provinces.find(
+          (p) =>
+            p.name?.toLowerCase() === destLower ||
+            p.slug?.toLowerCase() === destLower
+        );
+
+        if (!matchedProvince) {
+          // Find province that owns a place matching the destination
+          matchedProvince = provinces.find((p) =>
+            (p.places || []).some(
+              (pl) =>
+                pl.title?.toLowerCase() === destLower ||
+                pl.name?.toLowerCase() === destLower
+            )
+          );
+        }
+
+        if (matchedProvince) {
+          setProvincePlaces(matchedProvince.places || []);
+        } else {
+          // Fallback to all places
+          const all = [];
+          provinces.forEach((p) => {
+            (p.places || []).forEach((pl) => {
+              all.push(pl);
+            });
+          });
+          setProvincePlaces(all);
+        }
+      } catch (err) {
+        console.error("Failed to load suggestions:", err);
+      }
+    };
+    loadPlaces();
+    return () => { isMounted = false; };
+  }, [journey]);
+
+  // ---------- Close dropdown on click outside ----------
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowPlacesDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
+
+  // Filter matching places for autocomplete
+  const filteredPlaces = newPlaceName.trim()
+    ? provincePlaces.filter((p) =>
+        (p.title || p.name || "").toLowerCase().includes(newPlaceName.toLowerCase())
+      )
+    : provincePlaces;
+
+  // ---------- Day notes ----------
   const startEditNotes = (idx) => {
     setEditingDayIdx(idx);
     setDayNotesDraft(journey.days[idx].notes || "");
   };
 
   const saveNotes = async (idx) => {
-    const updatedDays = journey.days.map((d, i) =>
-      i === idx ? { ...d, notes: dayNotesDraft } : d
-    );
-    const updated = { ...journey, days: updatedDays };
-    setJourney(updated);
-    setEditingDayIdx(null);
-    await updateJourney(journeyId, { days: updatedDays });
+    setErrorMessage("");
+    const day = journey.days[idx];
+    const firstPlace = day?.places?.[0]; // Get the first itinerary item of this day
+
+    if (!firstPlace) {
+      setErrorMessage("Please add at least one place to this day first to save notes.");
+      setEditingDayIdx(null);
+      return;
+    }
+
+    try {
+      await updateItineraryItem(firstPlace.id, { notes: dayNotesDraft });
+      setEditingDayIdx(null);
+      await loadJourney(false); // Silent refresh
+    } catch (err) {
+      setErrorMessage(err?.message || "Failed to save notes.");
+    }
   };
 
-  // ── Places ─────────────────────────────────────────
+  // ---------- Places ----------
   const startAddPlace = (idx) => {
     setAddingPlaceDayIdx(idx);
     setNewPlaceName("");
+    setShowPlacesDropdown(true);
   };
 
-  const confirmAddPlace = async (idx) => {
-    const name = newPlaceName.trim();
-    if (!name) { setAddingPlaceDayIdx(null); return; }
-    const updatedDays = journey.days.map((d, i) =>
-      i === idx
-        ? { ...d, places: [...d.places, { id: `p-${Date.now()}`, name }] }
-        : d
-    );
-    const updated = { ...journey, days: updatedDays };
-    setJourney(updated);
+  const handleAddPlaceSelect = async (dayIdx, place) => {
     setAddingPlaceDayIdx(null);
-    await updateJourney(journeyId, { days: updatedDays });
+    setNewPlaceName("");
+    setShowPlacesDropdown(false);
+    setErrorMessage("");
+    try {
+      await createItineraryItem({
+        itinerary: Number(journeyId),
+        place: place.id,
+        day_number: dayIdx + 1,
+      });
+      await loadJourney(false); // Silent refresh
+    } catch (err) {
+      setErrorMessage(err?.message || "Failed to add place.");
+    }
   };
 
   const removePlace = async (dayIdx, placeId) => {
-    const updatedDays = journey.days.map((d, i) =>
-      i === dayIdx
-        ? { ...d, places: d.places.filter((p) => p.id !== placeId) }
-        : d
-    );
-    const updated = { ...journey, days: updatedDays };
-    setJourney(updated);
-    await updateJourney(journeyId, { days: updatedDays });
+    setErrorMessage("");
+    try {
+      await deleteItineraryItem(placeId); // placeId is the item_id from DB
+      await loadJourney(false); // Silent refresh
+    } catch (err) {
+      setErrorMessage(err?.message || "Failed to remove place.");
+    }
   };
 
-  // ── Delete journey ─────────────────────────────────
+  // ---------- Delete journey ----------
   const handleDelete = async () => {
     try {
       await deleteJourney(journeyId);
@@ -102,15 +192,16 @@ const JourneyDetailPage = () => {
     }
   };
 
-  // ── Format date ────────────────────────────────────
+  // ---------- Format date ----------
   const formatDate = (iso) => {
     if (!iso) return "";
-    return new Date(iso).toLocaleDateString("en-US", {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("en-US", {
       weekday: "short", month: "short", day: "numeric",
     });
   };
 
-  // ── Render ─────────────────────────────────────────
   return (
     <div className="flex h-screen bg-[#F4F7F8] font-sans overflow-hidden">
       <ItinerarySidebar activeView="plans" />
@@ -118,8 +209,14 @@ const JourneyDetailPage = () => {
       <main className="flex-1 overflow-y-auto pb-24">
         {/* Error */}
         {errorMessage && (
-          <div className="mx-6 mt-6 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-medium px-4 py-3">
-            {errorMessage}
+          <div className="mx-6 mt-6 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-medium px-4 py-3 relative">
+            <span>{errorMessage}</span>
+            <button
+              onClick={() => setErrorMessage("")}
+              className="absolute right-4 top-3 text-red-400 hover:text-red-600 font-bold"
+            >
+              &times;
+            </button>
           </div>
         )}
 
@@ -204,18 +301,31 @@ const JourneyDetailPage = () => {
 
               <div className="space-y-4">
                 {journey.days?.map((day, idx) => (
-                  <div key={day.date} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div key={day.id || day.date || idx} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-visible">
                     {/* Day Header */}
                     <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-100">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-[#00D06A] rounded-xl flex items-center justify-center text-white text-xs font-extrabold shrink-0">
                           {idx + 1}
                         </div>
-                        <span className="text-sm font-bold text-gray-800">{formatDate(day.date)}</span>
+                        <span className="text-sm font-bold text-gray-800">
+                          {formatDate(day.date) || day.label || `Day ${idx + 1}`}
+                        </span>
                       </div>
                       <button
-                        onClick={() => startEditNotes(idx)}
-                        className="text-xs font-semibold text-gray-400 hover:text-gray-700 transition-colors"
+                        onClick={() => {
+                          if (day.places.length === 0) {
+                            setErrorMessage("Please add at least one place to this day first to save notes.");
+                            return;
+                          }
+                          startEditNotes(idx);
+                        }}
+                        className={`text-xs font-semibold transition-colors ${
+                          day.places.length === 0
+                            ? "text-gray-300 cursor-not-allowed"
+                            : "text-gray-400 hover:text-gray-700"
+                        }`}
+                        title={day.places.length === 0 ? "Add a place first to write notes" : ""}
                       >
                         {day.notes ? "Edit notes" : "+ Add notes"}
                       </button>
@@ -234,29 +344,71 @@ const JourneyDetailPage = () => {
                           </div>
                           <button
                             onClick={() => removePlace(idx, place.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-400 transition-all"
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove place"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
                         </div>
                       ))}
 
-                      {/* Add place inline */}
+                      {/* Add place inline with Autocomplete suggestions */}
                       {addingPlaceDayIdx === idx ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            autoFocus
-                            type="text"
-                            value={newPlaceName}
-                            onChange={(e) => setNewPlaceName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") confirmAddPlace(idx); if (e.key === "Escape") setAddingPlaceDayIdx(null); }}
-                            placeholder="Place name..."
-                            className="flex-1 px-3 py-1.5 text-sm border-2 border-[#00D06A] rounded-lg focus:outline-none bg-white"
-                          />
-                          <button onClick={() => confirmAddPlace(idx)} className="text-xs font-bold text-[#00D06A] hover:text-green-700">Add</button>
-                          <button onClick={() => setAddingPlaceDayIdx(null)} className="text-xs font-bold text-gray-400 hover:text-gray-600">Cancel</button>
+                        <div ref={dropdownRef} className="relative flex-1 max-w-md">
+                          <div className="flex items-center gap-2">
+                            <input
+                              autoFocus
+                              type="text"
+                              value={newPlaceName}
+                              onChange={(e) => {
+                                setNewPlaceName(e.target.value);
+                                setShowPlacesDropdown(true);
+                              }}
+                              onFocus={() => setShowPlacesDropdown(true)}
+                              placeholder="Type place name..."
+                              className="flex-1 px-3 py-1.5 text-sm border-2 border-[#00D06A] rounded-lg focus:outline-none bg-white font-medium"
+                            />
+                            <button
+                              onClick={() => {
+                                setAddingPlaceDayIdx(null);
+                                setShowPlacesDropdown(false);
+                              }}
+                              className="text-xs font-bold text-gray-400 hover:text-gray-600"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+
+                          {showPlacesDropdown && filteredPlaces.length > 0 && (
+                            <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] z-50 max-h-56 overflow-y-auto">
+                              {filteredPlaces.map((pl) => (
+                                <button
+                                  key={pl.id}
+                                  type="button"
+                                  onClick={() => handleAddPlaceSelect(idx, pl)}
+                                  className="w-full text-left px-3.5 py-2.5 hover:bg-emerald-50 text-sm font-semibold text-gray-800 transition-colors flex items-center gap-3 border-b border-gray-50 last:border-b-0"
+                                >
+                                  {pl.image && (
+                                    <div className="w-7 h-7 rounded overflow-hidden shrink-0 bg-gray-100">
+                                      <img src={pl.image} alt="" className="w-full h-full object-cover" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="truncate text-sm font-bold text-gray-900">{pl.title || pl.name}</p>
+                                    <p className="text-[10px] text-gray-400 font-medium">{pl.category}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {showPlacesDropdown && newPlaceName.trim() && filteredPlaces.length === 0 && (
+                            <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4 text-center">
+                              <p className="text-xs text-gray-400 font-semibold">No matches found in this province.</p>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <button
@@ -279,7 +431,7 @@ const JourneyDetailPage = () => {
                             value={dayNotesDraft}
                             onChange={(e) => setDayNotesDraft(e.target.value)}
                             placeholder="Notes for this day..."
-                            className="w-full px-3 py-2 text-sm border-2 border-[#00D06A] rounded-lg focus:outline-none resize-none bg-white"
+                            className="w-full px-3 py-2 text-sm border-2 border-[#00D06A] rounded-lg focus:outline-none resize-none bg-white font-medium"
                           />
                           <div className="flex gap-2">
                             <button onClick={() => saveNotes(idx)} className="text-xs font-bold text-[#00D06A] hover:text-green-700">Save</button>

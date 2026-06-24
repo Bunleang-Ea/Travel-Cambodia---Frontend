@@ -1,16 +1,98 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  getMyProfile,
+  updateMyProfile,
+  changePassword,
+} from "../../services/modules/authApi";
+import { API_BASE_URL } from "../../services/core/apiConfig";
+import { getAuthUser } from "../../utils/authRole";
+
+const DEFAULT_AVATAR = "/images/chanratanak-nay-GRK6KO4exaI-unsplash.jpg";
+
+const toAbsoluteMediaUrl = (value) => {
+  const source = String(value || "").trim();
+  if (!source) return "";
+  if (/^https?:\/\//i.test(source)) return source;
+  if (source.startsWith("data:")) return source;
+
+  try {
+    const apiOrigin = new URL(API_BASE_URL, window.location.origin).origin;
+    return new URL(source, apiOrigin).toString();
+  } catch {
+    return source;
+  }
+};
 
 const ProfileSettingsPage = () => {
   // State for form inputs and toggles
   const [formData, setFormData] = useState({
-    fullName: "Ta Sok",
-    email: "tasok@gmail.com",
+    fullName: "",
+    email: "",
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
-
+  const [snapshot, setSnapshot] = useState({ fullName: "", email: "" });
   const [tripUpdates, setTripUpdates] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [profileImage, setProfileImage] = useState(DEFAULT_AVATAR);
+  const [snapshotImage, setSnapshotImage] = useState(DEFAULT_AVATAR);
+  const [profilePictureFile, setProfilePictureFile] = useState(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfile = async () => {
+      const authUser = getAuthUser();
+      const fallbackEmail = authUser?.email || "";
+
+      if (isMounted) {
+        setFormData((prev) => ({ ...prev, email: fallbackEmail }));
+      }
+
+      try {
+        const profile = await getMyProfile();
+        if (!isMounted) return;
+
+        const next = {
+          fullName: String(profile?.full_name || "").trim(),
+          email: String(profile?.email || fallbackEmail).trim(),
+        };
+        const nextImage =
+          toAbsoluteMediaUrl(profile?.profile_picture) ||
+          toAbsoluteMediaUrl(profile?.profile_picture_url) ||
+          DEFAULT_AVATAR;
+
+        setSnapshot(next);
+        setSnapshotImage(nextImage);
+        setProfileImage(nextImage);
+        setFormData((prev) => ({
+          ...prev,
+          fullName: next.fullName,
+          email: next.email,
+        }));
+      } catch (error) {
+        if (!isMounted) return;
+        setErrorMessage(
+          error?.message || "Unable to load your profile information.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Handle generic input change
   const handleChange = (e) => {
@@ -18,6 +100,126 @@ const ProfileSettingsPage = () => {
       ...formData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const handleCancel = () => {
+    setErrorMessage("");
+    setSuccessMessage("");
+    setFormData((prev) => ({
+      ...prev,
+      fullName: snapshot.fullName,
+      email: snapshot.email,
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    }));
+    setProfileImage(snapshotImage);
+    setProfilePictureFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSelectProfilePicture = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!String(file.type || "").startsWith("image/")) {
+      setErrorMessage("Please choose an image file.");
+      return;
+    }
+
+    setErrorMessage("");
+    setProfilePictureFile(file);
+    setProfileImage(URL.createObjectURL(file));
+  };
+
+  const handleSave = async () => {
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!formData.fullName.trim()) {
+      setErrorMessage("Full name is required.");
+      return;
+    }
+
+    const wantsPasswordChange =
+      formData.currentPassword ||
+      formData.newPassword ||
+      formData.confirmPassword;
+
+    if (wantsPasswordChange) {
+      // basic client-side validation
+      if (!formData.currentPassword) {
+        setErrorMessage("Current password is required to change password.");
+        return;
+      }
+      if (!formData.newPassword || formData.newPassword.length < 8) {
+        setErrorMessage("New password must be at least 8 characters.");
+        return;
+      }
+      if (formData.newPassword !== formData.confirmPassword) {
+        setErrorMessage("New password and confirmation do not match.");
+        return;
+      }
+    }
+
+    setIsSaving(true);
+    try {
+      // If user requested a password change, perform it first
+      if (wantsPasswordChange) {
+        await changePassword({
+          current_password: String(formData.currentPassword || ""),
+          new_password: String(formData.newPassword || ""),
+        });
+        setSuccessMessage((prev) => prev || "Password updated successfully.");
+        // clear password fields locally
+        setFormData((prev) => ({
+          ...prev,
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        }));
+      }
+      let payload = { full_name: formData.fullName.trim() };
+
+      if (profilePictureFile) {
+        const formPayload = new FormData();
+        formPayload.append("full_name", formData.fullName.trim());
+        formPayload.append("profile_picture", profilePictureFile);
+        payload = formPayload;
+      }
+
+      const updated = await updateMyProfile(payload);
+      const next = {
+        fullName: String(updated?.full_name || formData.fullName).trim(),
+        email: String(updated?.email || formData.email).trim(),
+      };
+      const nextImage =
+        toAbsoluteMediaUrl(updated?.profile_picture) ||
+        toAbsoluteMediaUrl(updated?.profile_picture_url) ||
+        profileImage ||
+        DEFAULT_AVATAR;
+
+      setSnapshot(next);
+      setSnapshotImage(nextImage);
+      setProfileImage(nextImage);
+      setProfilePictureFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setFormData((prev) => ({
+        ...prev,
+        fullName: next.fullName,
+        email: next.email,
+      }));
+      window.dispatchEvent(new Event("auth-changed"));
+      setSuccessMessage("Profile updated successfully.");
+    } catch (error) {
+      setErrorMessage(error?.message || "Failed to save profile.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -33,6 +235,17 @@ const ProfileSettingsPage = () => {
             Manage your account preferences and personal information.
           </p>
         </div>
+
+        {errorMessage && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">
+            {errorMessage}
+          </div>
+        )}
+        {successMessage && (
+          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 font-medium">
+            {successMessage}
+          </div>
+        )}
 
         {/* Settings Form Card */}
         <div className="bg-white rounded-[1.5rem] shadow-[0_12px_30px_rgba(15,23,42,0.07)] border border-gray-200 p-6 sm:p-10 mb-8">
@@ -63,7 +276,7 @@ const ProfileSettingsPage = () => {
                 <div className="flex flex-col items-center shrink-0">
                   <div className="relative w-24 h-24 rounded-2xl border border-gray-200 overflow-hidden mb-3 group cursor-pointer">
                     <img
-                      src="/images/chanratanak-nay-GRK6KO4exaI-unsplash.jpg"
+                      src={profileImage}
                       alt="Profile"
                       className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
                     />
@@ -86,10 +299,18 @@ const ProfileSettingsPage = () => {
                   </div>
                   <button
                     type="button"
+                    onClick={() => fileInputRef.current?.click()}
                     className="text-[9px] font-extrabold text-gray-500 uppercase tracking-widest hover:text-gray-800 transition-colors"
                   >
                     Update Photo
                   </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleSelectProfilePicture}
+                    className="hidden"
+                  />
                 </div>
 
                 {/* Info Inputs Grid */}
@@ -103,6 +324,7 @@ const ProfileSettingsPage = () => {
                       name="fullName"
                       value={formData.fullName}
                       onChange={handleChange}
+                      disabled={isLoading}
                       className="w-full px-4 py-3 bg-[#F8FAFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:bg-white transition-all text-sm font-medium text-gray-900"
                     />
                   </div>
@@ -114,8 +336,8 @@ const ProfileSettingsPage = () => {
                       type="email"
                       name="email"
                       value={formData.email}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 bg-[#F8FAFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:bg-white transition-all text-sm font-medium text-gray-900"
+                      readOnly
+                      className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -244,15 +466,18 @@ const ProfileSettingsPage = () => {
         <div className="flex items-center justify-end gap-4 mb-16">
           <button
             type="button"
+            onClick={handleCancel}
             className="text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors px-4 py-2.5"
           >
             Cancel
           </button>
           <button
             type="button"
+            onClick={handleSave}
+            disabled={isLoading || isSaving}
             className="bg-[#009B3E] hover:bg-green-700 text-white text-sm font-bold py-2.5 px-8 rounded-lg shadow-sm transition duration-200"
           >
-            Save Changes
+            {isSaving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </main>

@@ -1,63 +1,307 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { getMyProfile } from "../../services/modules/authApi";
+import { getJourneys } from "../../services/modules/itineraryApi";
+import { getProvinces } from "../../services/modules/travelApi";
+import { getAuthUser } from "../../utils/authRole";
+import { API_BASE_URL } from "../../services/core/apiConfig";
+
+const toAbsoluteMediaUrl = (value) => {
+  const source = String(value || "").trim();
+  if (!source) return "";
+  if (/^https?:\/\//i.test(source)) return source;
+  if (source.startsWith("data:")) return source;
+
+  try {
+    const apiOrigin = new URL(API_BASE_URL, window.location.origin).origin;
+    return new URL(source, apiOrigin).toString();
+  } catch {
+    return source;
+  }
+};
 
 const UserProfilePage = () => {
-  // Mock Data
-  const user = {
-    name: "Ta Sok",
-    location: "Phnom Penh, Cambodia",
-    avatar:
-      "/images/chanratanak-nay-GRK6KO4exaI-unsplash.jpg",
-    stats: {
-      trips: 4,
-      saved: 12,
-      reviews: 8,
-    },
-  };
+  const navigate = useNavigate();
+  const DEFAULT_AVATAR = "/images/chanratanak-nay-GRK6KO4exaI-unsplash.jpg";
+  const DEFAULT_TRIP_IMAGE =
+    "/images/bayon-temple-with-giant-stone-faces-angkor-wat-siem-reap-cambodia.jpg";
+  const DEFAULT_SAVED_IMAGE = "/images/vicky-t-EY3tC81nFt0-unsplash.jpg";
 
-  const trips = [
-    {
-      id: 1,
-      title: "Adventure in Siem Reap",
-      date: "Dec 12 - Dec 18, 2024",
-      status: "UPCOMING",
-      image:
-        "/images/bayon-temple-with-giant-stone-faces-angkor-wat-siem-reap-cambodia.jpg",
-      companions: 3,
-    },
-    {
-      id: 2,
-      title: "Bokor Hill Expedition",
-      date: "Aug 05 - Aug 08, 2024",
-      status: "COMPLETED",
-      image:
-        "/images/ancient-head-temple-cambodia.jpg",
-      companions: 0,
-    },
-  ];
+  const [profile, setProfile] = useState({
+    full_name: "",
+    email: "",
+    profile_picture_url: "",
+    profile_picture: null,
+  });
+  const [trips, setTrips] = useState([]);
+  const [savedPlaces, setSavedPlaces] = useState([]);
 
-  const savedPlaces = [
-    {
-      id: 1,
-      title: "Bokor Hill Station",
-      category: "HISTORY & NATURE",
-      image:
-        "/images/vicky-t-EY3tC81nFt0-unsplash.jpg",
-    },
-    {
-      id: 2,
-      title: "Central Market",
-      category: "SHOPPING",
-      image:
-        "/images/george-bakos-OvEr7BwXxxg-unsplash.jpg",
-    },
-    {
-      id: 3,
-      title: "Floating Village",
-      category: "CULTURE",
-      image:
-        "/images/graham-h-cambodia-2388090_1920.jpg",
-    },
-  ];
+  useEffect(() => {
+    let isMounted = true;
+
+    const SAVED_STORAGE_KEY = "travelCambodiaSaved";
+    const formatSlugTitle = (slug = "") =>
+      String(slug || "")
+        .split("-")
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+
+    const parseSavedPlaces = () => {
+      if (typeof window === "undefined") return [];
+      let raw = [];
+      try {
+        raw = JSON.parse(
+          window.localStorage.getItem(SAVED_STORAGE_KEY) || "[]",
+        );
+      } catch {
+        return [];
+      }
+      if (!Array.isArray(raw)) return [];
+
+      return raw
+        .map((item, index) => {
+          if (typeof item === "string" && item.trim()) {
+            const placeSlug = item.trim();
+            return {
+              id: `${placeSlug}-${index}`,
+              placeSlug,
+              provinceSlug: "",
+              detailsPath: "",
+              title: formatSlugTitle(placeSlug),
+              category: "Saved Place",
+              image: DEFAULT_SAVED_IMAGE,
+            };
+          }
+
+          if (!item || typeof item !== "object") return null;
+          const placeSlug = String(item.placeSlug || item.slug || "").trim();
+          if (!placeSlug) return null;
+          const provinceSlug = String(item.provinceSlug || "").trim();
+          const title = String(item.title || "").trim();
+          const image = String(item.image || "").trim();
+          const category =
+            String(item.category || "Saved Place").trim() || "Saved Place";
+
+          return {
+            id: `${provinceSlug || "unknown"}-${placeSlug}-${index}`,
+            placeSlug,
+            provinceSlug,
+            detailsPath:
+              provinceSlug && placeSlug
+                ? `/details/${provinceSlug}/${placeSlug}`
+                : "",
+            title: title || formatSlugTitle(placeSlug),
+            category,
+            image: image || DEFAULT_SAVED_IMAGE,
+          };
+        })
+        .filter(Boolean);
+    };
+
+    const toStoragePayload = (entries) =>
+      entries.map((entry) => ({
+        placeSlug: String(entry?.placeSlug || "").trim(),
+        provinceSlug: String(entry?.provinceSlug || "").trim(),
+        title: String(entry?.title || "").trim(),
+        image: String(entry?.image || "").trim(),
+        category:
+          String(entry?.category || "Saved Place").trim() || "Saved Place",
+      }));
+
+    const reconcileSavedPlacesWithProvinces = (entries, provinces) => {
+      const sourceEntries = Array.isArray(entries) ? entries : [];
+      const provinceList = Array.isArray(provinces) ? provinces : [];
+      const seen = new Set();
+
+      const reconciled = sourceEntries
+        .map((entry, index) => {
+          const placeSlug = String(entry?.placeSlug || "").trim();
+          if (!placeSlug) return null;
+
+          let matchedProvince =
+            provinceList.find(
+              (province) =>
+                String(province?.slug || "") ===
+                String(entry?.provinceSlug || ""),
+            ) || null;
+          let matchedPlace = matchedProvince?.places?.find(
+            (place) => String(place?.slug || "") === placeSlug,
+          );
+
+          if (!matchedPlace) {
+            for (const province of provinceList) {
+              const candidate = province?.places?.find(
+                (place) => String(place?.slug || "") === placeSlug,
+              );
+              if (candidate) {
+                matchedProvince = province;
+                matchedPlace = candidate;
+                break;
+              }
+            }
+          }
+
+          if (!matchedProvince || !matchedPlace) {
+            return null;
+          }
+
+          const key = `${matchedProvince.slug}::${matchedPlace.slug}`;
+          if (seen.has(key)) {
+            return null;
+          }
+          seen.add(key);
+
+          return {
+            id: `${matchedProvince.slug}-${matchedPlace.slug}-${index}`,
+            placeSlug: String(matchedPlace.slug || "").trim(),
+            provinceSlug: String(matchedProvince.slug || "").trim(),
+            detailsPath: `/details/${matchedProvince.slug}/${matchedPlace.slug}`,
+            title:
+              String(matchedPlace.title || "").trim() ||
+              String(entry?.title || "").trim() ||
+              formatSlugTitle(matchedPlace.slug),
+            category:
+              String(matchedPlace.category || "").trim() ||
+              String(entry?.category || "Saved Place").trim() ||
+              "Saved Place",
+            image:
+              String(matchedPlace.image || "").trim() ||
+              String(entry?.image || "").trim() ||
+              DEFAULT_SAVED_IMAGE,
+          };
+        })
+        .filter(Boolean);
+
+      return reconciled;
+    };
+
+    const formatTripDate = (startDate, endDate) => {
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
+      });
+      const start = startDate ? formatter.format(new Date(startDate)) : null;
+      const end = endDate ? formatter.format(new Date(endDate)) : null;
+      if (start && end) return `${start} - ${end}`;
+      if (start) return start;
+      return "Date not set";
+    };
+
+    const resolveTripStatus = (endDate) => {
+      if (!endDate) return "UPCOMING";
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(0, 0, 0, 0);
+      return end < today ? "COMPLETED" : "UPCOMING";
+    };
+
+    const loadData = async () => {
+      const auth = getAuthUser();
+      const parsedSavedPlaces = parseSavedPlaces();
+      if (isMounted) {
+        setProfile((prev) => ({
+          ...prev,
+          email: auth.email || prev.email,
+        }));
+        setSavedPlaces(parsedSavedPlaces);
+      }
+
+      try {
+        const provinces = await getProvinces();
+        if (isMounted) {
+          const reconciledSavedPlaces = reconcileSavedPlacesWithProvinces(
+            parsedSavedPlaces,
+            provinces,
+          );
+          setSavedPlaces(reconciledSavedPlaces);
+          window.localStorage.setItem(
+            SAVED_STORAGE_KEY,
+            JSON.stringify(toStoragePayload(reconciledSavedPlaces)),
+          );
+        }
+      } catch {
+        // Keep parsed local state when destinations cannot be loaded.
+      }
+
+      try {
+        const profileData = await getMyProfile();
+        if (isMounted) {
+          setProfile({
+            full_name: String(profileData?.full_name || "").trim(),
+            email: String(profileData?.email || auth.email || "").trim(),
+            profile_picture_url: toAbsoluteMediaUrl(
+              profileData?.profile_picture_url || "",
+            ),
+            profile_picture: toAbsoluteMediaUrl(
+              profileData?.profile_picture || "",
+            ),
+          });
+        }
+      } catch {
+        // Keep local auth fallback values if profile request fails.
+      }
+
+      try {
+        const journeyData = await getJourneys();
+        if (!isMounted) return;
+
+        const mappedTrips = (Array.isArray(journeyData) ? journeyData : []).map(
+          (trip) => ({
+            id: trip?.id || trip?.itinerary_id,
+            title: String(trip?.title || "Untitled Itinerary"),
+            date:
+              trip?.dateLabel ||
+              formatTripDate(
+                trip?.startDate || trip?.start_date,
+                trip?.endDate || trip?.end_date,
+              ),
+            status:
+              trip?.status ||
+              resolveTripStatus(trip?.endDate || trip?.end_date),
+            image:
+              toAbsoluteMediaUrl(trip?.image || trip?.image_url || "") ||
+              DEFAULT_TRIP_IMAGE,
+            companions: 0,
+          }),
+        );
+
+        setTrips(mappedTrips);
+      } catch {
+        if (isMounted) {
+          setTrips([]);
+        }
+      }
+    };
+
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const user = useMemo(() => {
+    const displayName =
+      profile.full_name ||
+      (profile.email ? profile.email.split("@")[0] : "Traveler");
+    const avatar =
+      toAbsoluteMediaUrl(profile.profile_picture) ||
+      toAbsoluteMediaUrl(profile.profile_picture_url) ||
+      DEFAULT_AVATAR;
+
+    return {
+      name: displayName,
+      location: "Cambodia",
+      avatar,
+      stats: {
+        trips: trips.length,
+        saved: savedPlaces.length,
+        reviews: 0,
+      },
+    };
+  }, [profile, trips.length, savedPlaces.length]);
 
   return (
     <div className="min-h-screen bg-[#F7FBFC] font-sans pb-20 pt-8">
@@ -116,7 +360,11 @@ const UserProfilePage = () => {
               <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
                 {user.name}
               </h1>
-              <button className="text-sm font-bold text-[#009B3E] hover:text-emerald-700 transition-colors hidden md:block">
+              <button
+                type="button"
+                onClick={() => navigate("/user/settings")}
+                className="text-sm font-bold text-[#009B3E] hover:text-emerald-700 transition-colors hidden md:block"
+              >
                 Edit Profile
               </button>
             </div>
@@ -188,10 +436,16 @@ const UserProfilePage = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {trips.length === 0 && (
+              <div className="md:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 text-sm font-medium text-gray-500">
+                No trips yet. Create your first itinerary to see it here.
+              </div>
+            )}
             {trips.map((trip) => (
-              <div
+              <Link
                 key={trip.id}
-                className="bg-white rounded-[1.5rem] shadow-[0_12px_30px_rgba(15,23,42,0.07)] border border-gray-200 overflow-hidden flex flex-col sm:flex-row group hover:shadow-md transition-all"
+                to={`/itinerary/${trip.id}`}
+                className="bg-white rounded-[1.5rem] shadow-[0_12px_30px_rgba(15,23,42,0.07)] border border-gray-200 overflow-hidden flex flex-col sm:flex-row group hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-[#009B3E] focus:ring-offset-2"
               >
                 {/* Trip Image */}
                 <div className="w-full sm:w-2/5 h-48 sm:h-auto relative overflow-hidden shrink-0">
@@ -252,20 +506,20 @@ const UserProfilePage = () => {
                       </div>
                     )}
 
-                    <button
+                    <span
                       className={`text-xs font-bold transition-colors ${
                         trip.status === "UPCOMING"
-                          ? "text-[#009B3E] hover:text-emerald-700"
-                          : "text-gray-500 hover:text-gray-800"
+                          ? "text-[#009B3E] group-hover:text-emerald-700"
+                          : "text-gray-500 group-hover:text-gray-800"
                       }`}
                     >
                       {trip.status === "UPCOMING"
                         ? "Manage Details"
                         : "View Photos"}
-                    </button>
+                    </span>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -284,10 +538,27 @@ const UserProfilePage = () => {
 
           {/* Clean, Predictable Responsive Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {savedPlaces.length === 0 && (
+              <div className="sm:col-span-2 lg:col-span-3 rounded-2xl border border-gray-200 bg-white p-6 text-sm font-medium text-gray-500">
+                No saved places yet. Save destinations to build your shortlist.
+              </div>
+            )}
             {savedPlaces.map((place) => (
               <div
                 key={place.id}
-                className="group relative aspect-[4/3] rounded-2xl overflow-hidden shadow-sm cursor-pointer border border-gray-200"
+                onClick={() => place.detailsPath && navigate(place.detailsPath)}
+                onKeyDown={(event) => {
+                  if (!place.detailsPath) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    navigate(place.detailsPath);
+                  }
+                }}
+                role={place.detailsPath ? "button" : "article"}
+                tabIndex={place.detailsPath ? 0 : -1}
+                className={`group relative aspect-[4/3] rounded-2xl overflow-hidden shadow-sm border border-gray-200 ${
+                  place.detailsPath ? "cursor-pointer" : "cursor-default"
+                }`}
               >
                 <img
                   src={place.image}
