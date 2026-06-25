@@ -150,7 +150,7 @@ const Navbar = () => {
             {roleDestination ? (
               <Link
                 to={roleDestination}
-                className="hidden lg:inline-flex px-4 py-2 rounded bg-[#009B3E] text-white hover:bg-green-700 transition-colors text-base font-semibold"
+                className="hidden lg:inline-flex px-3 py-1.5 rounded-lg bg-[#009B3E] text-white hover:bg-green-700 transition-colors text-sm font-bold"
               >
                 {roleLabel} Dashboard
               </Link>
