@@ -563,7 +563,10 @@ const UserProfilePage = () => {
             ))}
 
             {/* Add More Card */}
-            <div className="aspect-[4/3] rounded-2xl border-2 border-dashed border-gray-200 bg-white hover:border-[#009B3E] hover:bg-emerald-50 transition-colors flex flex-col items-center justify-center cursor-pointer group shadow-sm">
+            <Link
+              to="/locations"
+              className="aspect-[4/3] rounded-2xl border-2 border-dashed border-gray-200 bg-white hover:border-[#009B3E] hover:bg-emerald-50 transition-colors flex flex-col items-center justify-center cursor-pointer group shadow-sm"
+            >
               <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-[#009B3E] mb-3 group-hover:bg-[#009B3E] group-hover:text-white transition-colors">
                 <svg
                   className="w-6 h-6"
@@ -585,7 +588,7 @@ const UserProfilePage = () => {
               <p className="text-[10px] text-gray-400 font-medium mt-1">
                 Curate your next Cambodian adventure
               </p>
-            </div>
+            </Link>
           </div>
         </div>
       </div>
