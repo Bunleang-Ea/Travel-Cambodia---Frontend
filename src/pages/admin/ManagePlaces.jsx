@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ConfirmModal from "../../components/common/ConfirmModal";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
+
+const slugify = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/["']/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 import {
   deleteAdminPlace,
   getAdminCategories,
@@ -430,9 +438,13 @@ const ManagePlaces = () => {
                       className="hover:bg-gray-50/50 transition-colors"
                     >
                       <td className="px-6 py-4">
-                        <div className="text-sm font-bold text-gray-900">
+                        <Link
+                          to={`/details/${slugify(place.location_name)}/${slugify(place.name)}`}
+                          target="_blank"
+                          className="text-sm font-bold text-gray-900 hover:text-[#009B3E] hover:underline transition-colors block"
+                        >
                           {place.name}
-                        </div>
+                        </Link>
                         <div className="text-[11px] text-gray-500 max-w-[320px] truncate">
                           {place.description || "No description"}
                         </div>
