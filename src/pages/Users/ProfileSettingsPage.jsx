@@ -33,7 +33,6 @@ const ProfileSettingsPage = () => {
     confirmPassword: "",
   });
   const [snapshot, setSnapshot] = useState({ fullName: "", email: "" });
-  const [tripUpdates, setTripUpdates] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -410,55 +409,6 @@ const ProfileSettingsPage = () => {
               </div>
             </section>
 
-            <hr className="border-gray-200" />
-
-            {/* 3. Notifications Section */}
-            <section>
-              <div className="flex items-center mb-6">
-                <svg
-                  className="w-5 h-5 text-[#009B3E] mr-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2.5"
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                  />
-                </svg>
-                <h2 className="text-lg font-bold text-gray-900">
-                  Notifications
-                </h2>
-              </div>
-
-              <div className="bg-[#F8FAFC] rounded-xl p-5 flex items-center justify-between border border-gray-50">
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900 mb-0.5">
-                    Trip Updates
-                  </h4>
-                  <p className="text-[11px] text-gray-500 font-medium">
-                    Get real-time alerts about your planned itineraries.
-                  </p>
-                </div>
-
-                {/* Custom Toggle Switch */}
-                <button
-                  type="button"
-                  onClick={() => setTripUpdates(!tripUpdates)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                    tripUpdates ? "bg-[#009B3E]" : "bg-gray-200"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                      tripUpdates ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </div>
-            </section>
           </form>
         </div>
 
