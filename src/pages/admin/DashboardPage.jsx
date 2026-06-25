@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { getAdminGeneralStats, updateAdminReview, updateAdminContact } from "../../services/modules/adminApi";
 
 const DashboardPage = () => {
+  const location = useLocation();
+  const portalBasePath = location.pathname.startsWith("/super-admin")
+    ? "/super-admin"
+    : "/admin";
+
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -137,7 +142,7 @@ const DashboardPage = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
             <h3 className="text-lg font-bold text-gray-900">Recent Reviews</h3>
-            <Link to="../reviews" className="text-xs font-bold text-green-600 hover:text-green-700 transition-colors">
+            <Link to={`${portalBasePath}/reviews`} className="text-xs font-bold text-green-600 hover:text-green-700 transition-colors">
               View All
             </Link>
           </div>
@@ -182,7 +187,7 @@ const DashboardPage = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
             <h3 className="text-lg font-bold text-gray-900">Recent Contact Inquiries</h3>
-            <Link to="../contacts" className="text-xs font-bold text-green-600 hover:text-green-700 transition-colors">
+            <Link to={`${portalBasePath}/contacts`} className="text-xs font-bold text-green-600 hover:text-green-700 transition-colors">
               View All
             </Link>
           </div>
