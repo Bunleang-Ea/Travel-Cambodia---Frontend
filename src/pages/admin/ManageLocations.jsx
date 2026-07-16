@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ConfirmModal from "../../components/common/ConfirmModal";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
+
+const slugify = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/["']/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 import {
   deleteAdminLocation,
   getAdminLocations,
@@ -167,9 +175,13 @@ const ManageLocations = () => {
                         </div>
                       </td>
                       <td className="px-6 py-5">
-                        <div className="text-sm font-bold text-gray-900">
+                        <Link
+                          to={`/destinations/${slugify(loc.name)}`}
+                          target="_blank"
+                          className="text-sm font-bold text-gray-900 hover:text-[#009B3E] hover:underline transition-colors block"
+                        >
                           {loc.name}
-                        </div>
+                        </Link>
                         <div className="text-xs text-gray-400 font-medium">
                           ID: {loc.id}
                         </div>

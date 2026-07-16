@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { getMyProfile } from "../../services/modules/authApi";
 import { API_BASE_URL } from "../../services/core/apiConfig";
 import { getAuthUser } from "../../utils/authRole";
@@ -22,12 +22,38 @@ const toAbsoluteMediaUrl = (value) => {
 
 const AdminLayout = ({ children }) => {
   const { email } = getAuthUser();
-  const navClass = ({ isActive }) =>
-    `flex items-center px-4 py-2.5 rounded-lg text-sm transition-colors ${
-      isActive
+  const { pathname } = useLocation();
+
+  const isTabActive = (tabPath) => {
+    if (tabPath === "/admin/dashboard") {
+      return pathname === "/admin/dashboard";
+    }
+    if (tabPath === "/admin/places") {
+      return pathname === "/admin/places" || pathname === "/admin/add-destination";
+    }
+    if (tabPath === "/admin/categories") {
+      return pathname === "/admin/categories" || pathname === "/admin/add-category";
+    }
+    if (tabPath === "/admin/locations") {
+      return pathname === "/admin/locations" || pathname === "/admin/add-location";
+    }
+    if (tabPath === "/admin/reviews") {
+      return pathname === "/admin/reviews";
+    }
+    if (tabPath === "/admin/contacts") {
+      return pathname === "/admin/contacts";
+    }
+    return false;
+  };
+
+  const getNavClass = (tabPath) => {
+    const active = isTabActive(tabPath);
+    return `flex items-center px-4 py-2.5 rounded-lg text-sm transition-colors ${
+      active
         ? "bg-[#e6f7ec] text-[#009B3E] font-bold"
         : "text-gray-600 hover:bg-gray-50 font-medium"
     }`;
+  };
 
   const [profile, setProfile] = useState({
     full_name: "",
@@ -122,7 +148,7 @@ const AdminLayout = ({ children }) => {
 
           {/* Navigation Links */}
           <nav className="p-4 space-y-1">
-            <NavLink to="/admin/dashboard" className={navClass}>
+            <NavLink to="/admin/dashboard" className={() => getNavClass("/admin/dashboard")}>
               <svg
                 className="w-5 h-5 mr-3"
                 fill="none"
@@ -138,7 +164,7 @@ const AdminLayout = ({ children }) => {
               </svg>
               Dashboard
             </NavLink>
-            <NavLink to="/admin/places" className={navClass}>
+            <NavLink to="/admin/places" className={() => getNavClass("/admin/places")}>
               <svg
                 className="w-5 h-5 mr-3"
                 fill="none"
@@ -154,7 +180,7 @@ const AdminLayout = ({ children }) => {
               </svg>
               Manage Destinations
             </NavLink>
-            <NavLink to="/admin/categories" className={navClass}>
+            <NavLink to="/admin/categories" className={() => getNavClass("/admin/categories")}>
               <svg
                 className="w-5 h-5 mr-3"
                 fill="none"
@@ -170,7 +196,7 @@ const AdminLayout = ({ children }) => {
               </svg>
               Manage Categories
             </NavLink>
-            <NavLink to="/admin/locations" className={navClass}>
+            <NavLink to="/admin/locations" className={() => getNavClass("/admin/locations")}>
               <svg
                 className="w-5 h-5 mr-3"
                 fill="none"
@@ -192,7 +218,7 @@ const AdminLayout = ({ children }) => {
               </svg>
               Manage Locations
             </NavLink>
-            <NavLink to="/admin/reviews" className={navClass}>
+            <NavLink to="/admin/reviews" className={() => getNavClass("/admin/reviews")}>
               <svg
                 className="w-5 h-5 mr-3"
                 fill="none"
@@ -208,7 +234,7 @@ const AdminLayout = ({ children }) => {
               </svg>
               Manage User Reviews
             </NavLink>
-            <NavLink to="/admin/contacts" className={navClass}>
+            <NavLink to="/admin/contacts" className={() => getNavClass("/admin/contacts")}>
               <svg
                 className="w-5 h-5 mr-3"
                 fill="none"

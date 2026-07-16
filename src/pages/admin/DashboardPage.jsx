@@ -1,9 +1,23 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { getAdminGeneralStats, updateAdminReview, updateAdminContact } from "../../services/modules/adminApi";
+import { Link, useLocation } from "react-router-dom";
+import { getAdminGeneralStats, updateAdminReview, updateAdminContact, getAdminPlaces } from "../../services/modules/adminApi";
+
+const slugify = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/["']/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 const DashboardPage = () => {
+  const location = useLocation();
+  const portalBasePath = location.pathname.startsWith("/super-admin")
+    ? "/super-admin"
+    : "/admin";
+
   const [stats, setStats] = useState(null);
+  const [placesById, setPlacesById] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedContact, setSelectedContact] = useState(null);
@@ -12,8 +26,16 @@ const DashboardPage = () => {
 
   const loadStats = async () => {
     try {
-      const data = await getAdminGeneralStats();
-      setStats(data);
+      const [statsData, placesData] = await Promise.all([
+        getAdminGeneralStats(),
+        getAdminPlaces(),
+      ]);
+      setStats(statsData);
+      const placeLookup = {};
+      (Array.isArray(placesData) ? placesData : []).forEach((place) => {
+        placeLookup[String(place.place_id)] = place;
+      });
+      setPlacesById(placeLookup);
       setError("");
     } catch (err) {
       setError(err?.message || "Failed to load dashboard statistics.");
@@ -137,26 +159,40 @@ const DashboardPage = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
             <h3 className="text-lg font-bold text-gray-900">Recent Reviews</h3>
-            <Link to="../reviews" className="text-xs font-bold text-green-600 hover:text-green-700 transition-colors">
+            <Link to={`${portalBasePath}/reviews`} className="text-xs font-bold text-green-600 hover:text-green-700 transition-colors">
               View All
             </Link>
           </div>
           <div className="space-y-4">
             {stats?.recent_reviews?.length > 0 ? (
-              stats.recent_reviews.map((rev) => (
-                <div key={rev.review_id} className="flex gap-3 items-start p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition duration-200">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-bold text-gray-800 truncate">{rev.user_name || rev.user_email}</span>
-                      <span className="text-[10px] text-gray-400">{new Date(rev.created_at).toLocaleDateString()}</span>
+              stats.recent_reviews.map((rev) => {
+                const place = placesById[String(rev.place)] || null;
+                return (
+                  <div key={rev.review_id} className="flex gap-3 items-start p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition duration-200">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs font-bold text-gray-800 truncate">{rev.user_name || rev.user_email}</span>
+                        <span className="text-[10px] text-gray-400">{new Date(rev.created_at).toLocaleDateString()}</span>
+                      </div>
+                      {place && (
+                        <div className="mb-1 text-[11px] font-medium text-gray-500">
+                          on{" "}
+                          <Link
+                            to={`/details/${slugify(place.location_name)}/${slugify(place.name)}`}
+                            target="_blank"
+                            className="text-[#009B3E] hover:underline font-bold"
+                          >
+                            {place.name}
+                          </Link>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 text-amber-500 mb-1">
+                        {Array.from({ length: rev.rating }).map((_, i) => (
+                          <span key={i}>★</span>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-600 line-clamp-2 italic">"{rev.comment || 'No comment provided'}"</p>
                     </div>
-                    <div className="flex items-center gap-1 text-amber-500 mb-1">
-                      {Array.from({ length: rev.rating }).map((_, i) => (
-                        <span key={i}>★</span>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-600 line-clamp-2 italic">"{rev.comment || 'No comment provided'}"</p>
-                  </div>
                   <div className="flex flex-col items-end gap-1.5">
                     <button
                       type="button"
@@ -171,7 +207,8 @@ const DashboardPage = () => {
                     </button>
                   </div>
                 </div>
-              ))
+                );
+              })
             ) : (
               <p className="text-xs text-gray-400 text-center py-6">No recent reviews submitted.</p>
             )}
@@ -182,7 +219,7 @@ const DashboardPage = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
             <h3 className="text-lg font-bold text-gray-900">Recent Contact Inquiries</h3>
-            <Link to="../contacts" className="text-xs font-bold text-green-600 hover:text-green-700 transition-colors">
+            <Link to={`${portalBasePath}/contacts`} className="text-xs font-bold text-green-600 hover:text-green-700 transition-colors">
               View All
             </Link>
           </div>

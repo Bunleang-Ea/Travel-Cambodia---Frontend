@@ -156,7 +156,7 @@ const AddCategoryPage = () => {
       >
         <div>
           <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">
-            Category Name
+            Category Name <span className="text-red-500">*</span>
           </label>
           <input
             type="text"

@@ -6,12 +6,20 @@ import {
   getAuthUser,
   getRoleDestination,
 } from "../../utils/authRole";
+import { getMyProfile } from "../../services/modules/authApi";
+import { toAbsoluteMediaUrl } from "../../services/modules/travelApi";
+
+const DEFAULT_AVATAR = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2364748B'><rect width='100%25' height='100%25' fill='%23E2E8F0'/><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
 
 const Navbar = () => {
   const [authUser, setAuthUser] = useState(() => getAuthUser());
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [profilePicture, setProfilePicture] = useState("");
+  const [profileTrigger, setProfileTrigger] = useState(0);
   const location = useLocation();
+
+  const isLoggedIn = Boolean(authUser.email);
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -19,7 +27,10 @@ const Navbar = () => {
   }, [location.pathname]);
 
   useEffect(() => {
-    const syncAuthUser = () => setAuthUser(getAuthUser());
+    const syncAuthUser = () => {
+      setAuthUser(getAuthUser());
+      setProfileTrigger((prev) => prev + 1);
+    };
 
     window.addEventListener("auth-changed", syncAuthUser);
     window.addEventListener("storage", syncAuthUser);
@@ -30,6 +41,30 @@ const Navbar = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    const fetchProfilePicture = async () => {
+      if (!isLoggedIn) {
+        setProfilePicture("");
+        return;
+      }
+      try {
+        const profileData = await getMyProfile();
+        if (isMounted && profileData) {
+          const pic = profileData.profile_picture || profileData.profile_picture_url || "";
+          setProfilePicture(pic ? toAbsoluteMediaUrl(pic) : "");
+        }
+      } catch (err) {
+        // Fallback or ignore
+      }
+    };
+
+    fetchProfilePicture();
+    return () => {
+      isMounted = false;
+    };
+  }, [authUser.email, isLoggedIn, profileTrigger]);
+
   const roleDestination = getRoleDestination(authUser.role);
   const roleLabel =
     authUser.role === "superadmin"
@@ -37,7 +72,6 @@ const Navbar = () => {
       : authUser.role === "admin"
         ? "Admin"
         : "";
-  const isLoggedIn = Boolean(authUser.email);
 
   const handleConfirmLogout = () => {
     clearAuthUser();
@@ -150,7 +184,7 @@ const Navbar = () => {
             {roleDestination ? (
               <Link
                 to={roleDestination}
-                className="hidden lg:inline-flex px-4 py-2 rounded bg-[#009B3E] text-white hover:bg-green-700 transition-colors text-base font-semibold"
+                className="hidden lg:inline-flex px-3 py-1.5 rounded-lg bg-[#009B3E] text-white hover:bg-green-700 transition-colors text-sm font-bold"
               >
                 {roleLabel} Dashboard
               </Link>
@@ -193,15 +227,16 @@ const Navbar = () => {
                 {/* User Profile */}
                 <Link
                   to="/user/profile"
-                  className="hidden lg:flex items-center justify-center w-8 h-8 border-[1.5px] border-[#009B3E] rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+                  className="hidden lg:flex items-center justify-center w-8 h-8 border-[1.5px] border-[#009B3E] rounded-full overflow-hidden hover:opacity-90 transition-opacity"
                 >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <img
+                    src={profilePicture || DEFAULT_AVATAR}
+                    alt="User Profile"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = DEFAULT_AVATAR;
+                    }}
+                  />
                 </Link>
 
                 {/* Settings */}
@@ -295,6 +330,26 @@ const Navbar = () => {
                 </>
               ) : (
                 <>
+                  <div className="flex items-center gap-3 px-4 py-2 mb-2 bg-gray-50/80 rounded-2xl border border-gray-100">
+                    <div className="w-10 h-10 border border-gray-200 rounded-full overflow-hidden shrink-0">
+                      <img
+                        src={profilePicture || DEFAULT_AVATAR}
+                        alt="User Profile"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = DEFAULT_AVATAR;
+                        }}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">
+                        {authUser.email}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Logged In
+                      </p>
+                    </div>
+                  </div>
                   <Link to="/user/profile" className="block px-4 py-3 rounded-xl text-base font-medium text-gray-700 hover:bg-gray-50">
                     My Profile
                   </Link>

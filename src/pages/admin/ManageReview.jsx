@@ -1,4 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+
+const slugify = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/["']/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 import {
   deleteAdminReview,
   getAdminPlaces,
@@ -293,9 +302,19 @@ const ManageReview = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-gray-900">
-                        {review.destinationName}
-                      </div>
+                      {placesById[String(review.place)] ? (
+                        <Link
+                          to={`/details/${slugify(placesById[String(review.place)].location_name)}/${slugify(placesById[String(review.place)].name)}`}
+                          target="_blank"
+                          className="text-sm font-bold text-gray-900 hover:text-[#009B3E] hover:underline transition-colors block"
+                        >
+                          {review.destinationName}
+                        </Link>
+                      ) : (
+                        <div className="text-sm font-bold text-gray-900">
+                          {review.destinationName}
+                        </div>
+                      )}
                       <div className="text-[11px] text-gray-400">
                         {review.destinationLocation}
                       </div>

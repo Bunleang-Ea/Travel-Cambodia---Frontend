@@ -22,7 +22,7 @@ const toAbsoluteMediaUrl = (value) => {
 
 const UserProfilePage = () => {
   const navigate = useNavigate();
-  const DEFAULT_AVATAR = "/images/chanratanak-nay-GRK6KO4exaI-unsplash.jpg";
+  const DEFAULT_AVATAR = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2364748B'><rect width='100%25' height='100%25' fill='%23E2E8F0'/><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
   const DEFAULT_TRIP_IMAGE =
     "/images/bayon-temple-with-giant-stone-faces-angkor-wat-siem-reap-cambodia.jpg";
   const DEFAULT_SAVED_IMAGE = "/images/vicky-t-EY3tC81nFt0-unsplash.jpg";
@@ -313,45 +313,13 @@ const UserProfilePage = () => {
 
           {/* Avatar Area */}
           <div className="relative shrink-0">
-            <div className="w-28 h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border-4 border-white shadow-lg relative group">
+            <div className="w-28 h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border-4 border-white shadow-lg relative">
               <img
                 src={user.avatar}
                 alt={user.name}
                 className="w-full h-full object-cover"
               />
-              {/* Edit overlay on hover */}
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                <svg
-                  className="w-6 h-6 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                  />
-                </svg>
-              </div>
             </div>
-            {/* Quick edit floating button */}
-            <button className="absolute -bottom-3 -right-3 w-10 h-10 bg-[#009B3E] text-white rounded-full border-4 border-white flex items-center justify-center shadow-sm hover:bg-green-700 transition-colors">
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2.5"
-                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                />
-              </svg>
-            </button>
           </div>
 
           {/* User Info */}
@@ -595,7 +563,10 @@ const UserProfilePage = () => {
             ))}
 
             {/* Add More Card */}
-            <div className="aspect-[4/3] rounded-2xl border-2 border-dashed border-gray-200 bg-white hover:border-[#009B3E] hover:bg-emerald-50 transition-colors flex flex-col items-center justify-center cursor-pointer group shadow-sm">
+            <Link
+              to="/locations"
+              className="aspect-[4/3] rounded-2xl border-2 border-dashed border-gray-200 bg-white hover:border-[#009B3E] hover:bg-emerald-50 transition-colors flex flex-col items-center justify-center cursor-pointer group shadow-sm"
+            >
               <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-[#009B3E] mb-3 group-hover:bg-[#009B3E] group-hover:text-white transition-colors">
                 <svg
                   className="w-6 h-6"
@@ -617,7 +588,7 @@ const UserProfilePage = () => {
               <p className="text-[10px] text-gray-400 font-medium mt-1">
                 Curate your next Cambodian adventure
               </p>
-            </div>
+            </Link>
           </div>
         </div>
       </div>
