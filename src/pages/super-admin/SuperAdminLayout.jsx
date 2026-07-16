@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { getMyProfile } from "../../services/modules/authApi";
 import { API_BASE_URL } from "../../services/core/apiConfig";
 import { getAuthUser } from "../../utils/authRole";
@@ -22,12 +22,41 @@ const toAbsoluteMediaUrl = (value) => {
 
 const SuperAdminLayout = ({ children }) => {
   const { email } = getAuthUser();
-  const navClass = ({ isActive }) =>
-    `flex items-center px-4 py-2.5 rounded-lg text-sm transition-colors ${
-      isActive
+  const { pathname } = useLocation();
+
+  const isTabActive = (tabPath) => {
+    if (tabPath === "/super-admin/dashboard") {
+      return pathname === "/super-admin/dashboard";
+    }
+    if (tabPath === "/super-admin/users") {
+      return pathname === "/super-admin/users" || pathname === "/super-admin/create-user";
+    }
+    if (tabPath === "/super-admin/places") {
+      return pathname === "/super-admin/places" || pathname === "/super-admin/add-destination";
+    }
+    if (tabPath === "/super-admin/categories") {
+      return pathname === "/super-admin/categories" || pathname === "/super-admin/add-category";
+    }
+    if (tabPath === "/super-admin/locations") {
+      return pathname === "/super-admin/locations" || pathname === "/super-admin/add-location";
+    }
+    if (tabPath === "/super-admin/reviews") {
+      return pathname === "/super-admin/reviews";
+    }
+    if (tabPath === "/super-admin/contacts") {
+      return pathname === "/super-admin/contacts";
+    }
+    return false;
+  };
+
+  const getNavClass = (tabPath) => {
+    const active = isTabActive(tabPath);
+    return `flex items-center px-4 py-2.5 rounded-lg text-sm transition-colors ${
+      active
         ? "bg-[#e6f7ec] text-[#009B3E] font-bold"
-        : "text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium"
+        : "text-gray-505 hover:bg-gray-50 hover:text-gray-900 font-medium"
     }`;
+  };
 
   const [profile, setProfile] = useState({
     full_name: "",
@@ -125,7 +154,7 @@ const SuperAdminLayout = ({ children }) => {
                 Super Admin Panel
               </h2>
               <nav className="space-y-1 px-3">
-                <NavLink to="/super-admin/dashboard" className={navClass}>
+                <NavLink to="/super-admin/dashboard" className={() => getNavClass("/super-admin/dashboard")}>
                   <svg
                     className="w-4 h-4 mr-3"
                     fill="none"
@@ -141,7 +170,7 @@ const SuperAdminLayout = ({ children }) => {
                   </svg>
                   Dashboard
                 </NavLink>
-                <NavLink to="/super-admin/users" className={navClass}>
+                <NavLink to="/super-admin/users" className={() => getNavClass("/super-admin/users")}>
                   <svg
                     className="w-4 h-4 mr-3"
                     fill="none"
@@ -165,7 +194,7 @@ const SuperAdminLayout = ({ children }) => {
                 Content Management
               </h2>
               <nav className="space-y-1 px-3">
-                <NavLink to="/super-admin/places" className={navClass}>
+                <NavLink to="/super-admin/places" className={() => getNavClass("/super-admin/places")}>
                   <svg
                     className="w-4 h-4 mr-3"
                     fill="none"
@@ -182,7 +211,7 @@ const SuperAdminLayout = ({ children }) => {
                   Manage Destinations
                 </NavLink>
 
-                <NavLink to="/super-admin/categories" className={navClass}>
+                <NavLink to="/super-admin/categories" className={() => getNavClass("/super-admin/categories")}>
                   <svg
                     className="w-4 h-4 mr-3"
                     fill="none"
@@ -199,7 +228,7 @@ const SuperAdminLayout = ({ children }) => {
                   Manage Categories
                 </NavLink>
 
-                <NavLink to="/super-admin/locations" className={navClass}>
+                <NavLink to="/super-admin/locations" className={() => getNavClass("/super-admin/locations")}>
                   <svg
                     className="w-4 h-4 mr-3"
                     fill="none"
@@ -222,7 +251,7 @@ const SuperAdminLayout = ({ children }) => {
                   Manage Locations
                 </NavLink>
 
-                <NavLink to="/super-admin/reviews" className={navClass}>
+                <NavLink to="/super-admin/reviews" className={() => getNavClass("/super-admin/reviews")}>
                   <svg
                     className="w-4 h-4 mr-3"
                     fill="none"
@@ -238,7 +267,7 @@ const SuperAdminLayout = ({ children }) => {
                   </svg>
                   Manage User Reviews
                 </NavLink>
-                <NavLink to="/super-admin/contacts" className={navClass}>
+                <NavLink to="/super-admin/contacts" className={() => getNavClass("/super-admin/contacts")}>
                   <svg
                     className="w-4 h-4 mr-3"
                     fill="none"

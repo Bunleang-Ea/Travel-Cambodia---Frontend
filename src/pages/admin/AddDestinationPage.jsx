@@ -369,7 +369,7 @@ const AddDestinationPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
-              Destination Name
+              Destination Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -383,7 +383,7 @@ const AddDestinationPage = () => {
 
           <div className="relative" ref={provinceContainerRef}>
             <label className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">
-              City / Province
+              City / Province <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
