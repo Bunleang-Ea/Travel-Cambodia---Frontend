@@ -367,6 +367,7 @@ const CreateTripPage = () => {
                       </div>
                       <input
                         type="date"
+                        min={new Date().toISOString().split("T")[0]}
                         value={startDate}
                         onChange={(event) => setStartDate(event.target.value)}
                         className="w-full pl-11 pr-4 py-3.5 bg-[#F8FAFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00D06A] focus:bg-white transition-all text-sm font-medium text-gray-900"
@@ -395,6 +396,7 @@ const CreateTripPage = () => {
                       </div>
                       <input
                         type="date"
+                        min={startDate || new Date().toISOString().split("T")[0]}
                         value={endDate}
                         onChange={(event) => setEndDate(event.target.value)}
                         className="w-full pl-11 pr-4 py-3.5 bg-[#F8FAFC] border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00D06A] focus:bg-white transition-all text-sm font-medium text-gray-900"
