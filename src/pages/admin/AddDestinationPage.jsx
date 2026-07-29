@@ -257,7 +257,14 @@ const AddDestinationPage = () => {
       location_name_input: matchedProvince ? "" : formData.locationName.trim(),
       publishing_status: formData.publishingStatus,
       is_featured: Boolean(formData.isFeatured),
-      map_link: formData.mapLink.trim() || null,
+      map_link: (() => {
+        let ml = formData.mapLink.trim();
+        if (ml.includes("<iframe") && ml.includes("src=")) {
+          const match = ml.match(/src="([^"]+)"/);
+          if (match) ml = match[1];
+        }
+        return ml || null;
+      })(),
       contact_info: formData.contactInfo.trim() || null,
       best_time_to_visit: formData.bestTimeToVisit.trim() || null,
       recommended_duration: formData.recommendedDuration.trim() || null,
@@ -573,9 +580,8 @@ const AddDestinationPage = () => {
                         });
                       }
                     }}
-                    className={`relative h-[200px] w-full bg-gray-100 rounded-lg overflow-hidden transition-all duration-200 border-2 ${
-                      isDragOverCover ? "border-[#009B3E] scale-[0.99]" : "border-transparent"
-                    }`}
+                    className={`relative h-[200px] w-full bg-gray-100 rounded-lg overflow-hidden transition-all duration-200 border-2 ${isDragOverCover ? "border-[#009B3E] scale-[0.99]" : "border-transparent"
+                      }`}
                   >
                     <img
                       src={previewItems[0].url}
@@ -664,7 +670,7 @@ const AddDestinationPage = () => {
               Map Link
             </label>
             <input
-              type="url"
+              type="text"
               name="mapLink"
               value={formData.mapLink}
               onChange={handleChange}
