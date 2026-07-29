@@ -300,8 +300,8 @@ const DetailsPage = () => {
   const getReviewPhotoUrls = (review) =>
     Array.isArray(review?.photos)
       ? review.photos
-          .map((photo) => String(photo?.image_url || "").trim())
-          .filter(Boolean)
+        .map((photo) => String(photo?.image_url || "").trim())
+        .filter(Boolean)
       : [];
 
   const savePlace = () => {
@@ -317,16 +317,16 @@ const DetailsPage = () => {
     const nextSaved = isPlaceSaved
       ? withoutCurrent
       : [
-          ...withoutCurrent,
-          {
-            placeSlug: String(placeSlug || "").trim(),
-            provinceSlug: String(province.slug || "").trim(),
-            title: String(place.title || "").trim(),
-            image: String(place.image || "").trim(),
-            category:
-              String(place.category || "Saved Place").trim() || "Saved Place",
-          },
-        ];
+        ...withoutCurrent,
+        {
+          placeSlug: String(placeSlug || "").trim(),
+          provinceSlug: String(province.slug || "").trim(),
+          title: String(place.title || "").trim(),
+          image: String(place.image || "").trim(),
+          category:
+            String(place.category || "Saved Place").trim() || "Saved Place",
+        },
+      ];
 
     window.localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(nextSaved));
     setSavedPlacesVersion((version) => version + 1);
@@ -591,7 +591,7 @@ const DetailsPage = () => {
             <span className="text-xs text-gray-400">Images will appear here once added by the administrator.</span>
           </div>
         ) : galleryImages.length === 1 ? (
-          <div 
+          <div
             className="w-full h-[300px] sm:h-[450px] rounded-[1.5rem] overflow-hidden border border-gray-200 shadow-[0_12px_30px_rgba(15,23,42,0.07)] mb-12 cursor-pointer relative group"
             onClick={() => setActiveLightboxIndex(0)}
           >
@@ -609,7 +609,7 @@ const DetailsPage = () => {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12">
             {/* Big left image */}
-            <div 
+            <div
               className="h-[300px] sm:h-[400px] rounded-[1.5rem] overflow-hidden border border-gray-200 shadow-[0_12px_30px_rgba(15,23,42,0.07)] cursor-pointer relative group"
               onClick={() => setActiveLightboxIndex(0)}
             >
@@ -718,7 +718,7 @@ const DetailsPage = () => {
               </section>
             ) : null}
 
-             <section>
+            <section>
               <h2 className="text-2xl font-bold text-gray-900 mb-4">
                 Location
               </h2>
@@ -726,9 +726,19 @@ const DetailsPage = () => {
                 <div className="relative h-[300px] w-full overflow-hidden">
                   <iframe
                     title={`${place.title} Location`}
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                      `${place.title}, ${province.name}, Cambodia`
-                    )}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                    src={(() => {
+                      const link = String(place.mapLink || place.map_link || "").trim();
+                      if (link.includes("<iframe")) {
+                        const match = link.match(/src="([^"]+)"/);
+                        if (match) return match[1];
+                      }
+                      if (link.includes("/embed?")) {
+                        return link;
+                      }
+                      const isCoordinate = /^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/.test(link);
+                      const q = isCoordinate ? link : `${place.title}, ${province.name}, Cambodia`;
+                      return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+                    })()}
                     width="100%"
                     height="100%"
                     style={{ border: 0 }}
@@ -822,16 +832,16 @@ const DetailsPage = () => {
                 ) : null}
 
                 {!isLoadingReviews &&
-                !reviewErrorMessage &&
-                placeReviews.length === 0 ? (
+                  !reviewErrorMessage &&
+                  placeReviews.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-600">
                     No reviews yet. Be the first to share your experience.
                   </div>
                 ) : null}
 
                 {!isLoadingReviews &&
-                !reviewErrorMessage &&
-                placeReviews.length > 0 ? (
+                  !reviewErrorMessage &&
+                  placeReviews.length > 0 ? (
                   <div className="space-y-4">
                     {placeReviews.map((review) => (
                       <div
@@ -857,11 +867,10 @@ const DetailsPage = () => {
                               {[1, 2, 3, 4, 5].map((star) => (
                                 <svg
                                   key={`${review.review_id}-${star}`}
-                                  className={`w-4 h-4 ${
-                                    star <= Number(review.rating || 0)
+                                  className={`w-4 h-4 ${star <= Number(review.rating || 0)
                                       ? "fill-current"
                                       : "text-gray-200 fill-current"
-                                  }`}
+                                    }`}
                                   viewBox="0 0 20 20"
                                 >
                                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -1081,7 +1090,7 @@ const DetailsPage = () => {
 
       {/* Lightbox Gallery Modal */}
       {activeLightboxIndex !== null && (
-        <div 
+        <div
           className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md select-none animate-in fade-in duration-200"
           onClick={() => setActiveLightboxIndex(null)}
         >
@@ -1099,7 +1108,7 @@ const DetailsPage = () => {
           </div>
 
           {/* Main Image Container */}
-          <div 
+          <div
             className="relative max-w-5xl w-full h-[70vh] flex items-center justify-center px-4"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1135,7 +1144,7 @@ const DetailsPage = () => {
 
           {/* Bottom Thumbnail Bar */}
           {galleryImages.length > 1 && (
-            <div 
+            <div
               className="absolute bottom-6 flex justify-center gap-2 overflow-x-auto max-w-full px-6 py-2"
               onClick={(e) => e.stopPropagation()}
             >
@@ -1143,11 +1152,10 @@ const DetailsPage = () => {
                 <button
                   key={`thumb-${idx}`}
                   onClick={() => setActiveLightboxIndex(idx)}
-                  className={`w-14 h-14 rounded-lg overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
-                    idx === activeLightboxIndex 
-                      ? "border-[#009B3E] scale-105 shadow-md" 
+                  className={`w-14 h-14 rounded-lg overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${idx === activeLightboxIndex
+                      ? "border-[#009B3E] scale-105 shadow-md"
                       : "border-transparent opacity-40 hover:opacity-80"
-                  }`}
+                    }`}
                 >
                   <img src={image} alt="" className="w-full h-full object-cover" />
                 </button>
