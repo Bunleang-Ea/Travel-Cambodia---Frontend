@@ -728,16 +728,16 @@ const DetailsPage = () => {
                     title={`${place.title} Location`}
                     src={(() => {
                       const link = String(place.mapLink || place.map_link || "").trim();
-                      if (link.includes("<iframe")) {
+                      if (link.includes("<iframe") && link.includes("src=")) {
                         const match = link.match(/src="([^"]+)"/);
                         if (match) return match[1];
                       }
-                      if (link.includes("/embed?")) {
+                      if (link.includes("google.com/maps/embed")) {
                         return link;
                       }
-                      const isCoordinate = /^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/.test(link);
-                      const q = isCoordinate ? link : `${place.title}, ${province.name}, Cambodia`;
-                      return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+                      return `https://maps.google.com/maps?q=${encodeURIComponent(
+                        `${place.title}, ${province.name}, Cambodia`
+                      )}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
                     })()}
                     width="100%"
                     height="100%"
